@@ -268,67 +268,92 @@ export default function App(){
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2800);};
 
-  const buildContext=()=>{
+  // Smart Trading Coach – analyzes real data
+  const smartCoach=(userMsg,trigger)=>{
     const wins=t09.filter(t=>t.pnl>0).length;
     const wr=t09.length?Math.round(wins/t09.length*100):0;
     const todayT=t09.filter(t=>t.date===todayISO());
-    const todPnl=Math.round(todayT.reduce((s,t)=>s+t.pnl,0)*100)/100;
+    const todPnlV=Math.round(todayT.reduce((s,t)=>s+t.pnl,0)*100)/100;
     const DAYS=["So","Mo","Di","Mi","Do","Fr","Sa"];
     const tod=DAYS[new Date().getDay()];
-    const m={};t09.forEach(t=>{const d=DAYS[new Date(t.date).getDay()];if(!m[d])m[d]={wins:0,n:0};m[d].n++;if(t.pnl>0)m[d].wins++;});
-    const dayWR=m[tod]?Math.round(m[tod].wins/m[tod].n*100):0;
-    const last5=t09.slice(-5).map(t=>`${t.date} ${t.contract} ${t.dir} ${t.pnl>=0?"+":""}$${t.pnl.toFixed(0)}`).join(", ");
-    return `Du bist Jeronimo, NQ/MNQ Futures Trader bei TTP (The Trading Pit). 
-Konto: P1-235109, Saldo: $${saldo.toFixed(2)}, Kontoabstand: $${kontoabstand.toFixed(0)}
-Gesamtstatistik: ${t09.length} Trades, ${wr}% Trefferquote
-Heute (${todayISO()}, ${tod}): ${todayT.length} Trades, P&L: ${todPnl>=0?"+":""}$${Math.abs(todPnl).toFixed(0)}
-${tod} Trefferquote historisch: ${dayWR}%
-Letzte 5 Trades: ${last5}
-Hauptproblem: Overtrading (${t09.length>0?Math.round(t09.filter(t=>{const m2={};t09.filter(x=>x.date===t.date).forEach(x=>x);return t09.filter(x=>x.date===t.date).length>=3}).length/t09.length*100):0}% der Trades an Overtrading-Tagen)
-Regeln: Max 2 Trades/Tag, nur 16:15-17:30 Uhr, 1 MNQ Kontrakt, 15 Min Pause nach Trade
-Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber motivierender Trading-Coach.`;
+    const dayMap={};t09.forEach(t=>{const d=DAYS[new Date(t.date).getDay()];if(!dayMap[d])dayMap[d]={w:0,n:0,pnl:0};dayMap[d].n++;dayMap[d].pnl+=t.pnl;if(t.pnl>0)dayMap[d].w++;});
+    const dayWR=dayMap[tod]?Math.round(dayMap[tod].w/dayMap[tod].n*100):0;
+    const lastT=t09[t09.length-1];
+    const hour=new Date().getHours();
+    const min=new Date().getMinutes();
+    const inWindow=hour===16&&min>=15||hour===17&&min<=30;
+    
+    // Trigger-based responses
+    if(trigger==="trading_window"){
+      if(dayWR<40&&dayMap[tod]&&dayMap[tod].n>=3)return `⚠️ Trading-Fenster offen, aber ${tod} ist statistisch dein schlechtester Tag (${dayWR}% WR über ${dayMap[tod].n} Trades). Empfehlung: Heute nur paper-traden oder Pause.`;
+      if(dayWR>=60)return `✅ Trading-Fenster offen! ${tod} ist dein STARKER Tag (${dayWR}% WR). Setup: Heatmap Correlation SP, max 2 Trades, 1 MNQ.`;
+      return `📊 Trading-Fenster offen. ${tod}-WR: ${dayWR}%. Halte dich strikt an: max 2 Trades, 16:15–17:30, 1 MNQ. Kontoabstand: $${kontoabstand.toFixed(0)}.`;
+    }
+    if(trigger==="overtrading"){
+      return `🛑 STOPP! Das ist dein ${todayT.length}. Trade heute. Deine Regel: MAX 2. Schließe die Plattform JETZT. Morgen bist du gesperrt. Heutige Performance: ${todPnlV>=0?"+":""}$${todPnlV.toFixed(0)}.`;
+    }
+    if(trigger==="after_trade"&&lastT){
+      const ok=lastT.pnl>0;
+      const ruleScore=Object.values(lastT.rules||{}).filter(Boolean).length;
+      const totalRules=Object.keys(lastT.rules||{}).length;
+      const rulePct=totalRules?Math.round(ruleScore/totalRules*100):0;
+      if(ok&&rulePct>=80)return `🎯 Stark! ${lastT.contract} ${lastT.dir} +$${lastT.pnl.toFixed(0)}. Regelquote: ${rulePct}%. So sieht Disziplin aus. Heute: ${todayT.length}/2 Trades.`;
+      if(ok&&rulePct<80)return `📈 Gewinn (+$${lastT.pnl.toFixed(0)}) – aber Regelquote nur ${rulePct}%. Du hast Glück gehabt. Glück ist keine Strategie.`;
+      if(!ok&&rulePct>=80)return `❌ Verlust ($${lastT.pnl.toFixed(0)}) – aber ${rulePct}% Regelquote. Das passiert. Wichtig: keine Rache-Trades. Pause einhalten!`;
+      return `🚨 Verlust ($${lastT.pnl.toFixed(0)}) UND nur ${rulePct}% Regelquote. Das ist ein Setup für Overtrading. Atme tief durch. 15 Min Pause sind PFLICHT.`;
+    }
+    
+    // User input parsing
+    const msg=(userMsg||"").toLowerCase();
+    if(msg.includes("hallo")||msg.includes("hi")||msg.includes("hey")){
+      return `Hi Jeronimo! 👋 ${t09.length} Trades, ${wr}% WR. Heute: ${todayT.length}/2 (${todPnlV>=0?"+":""}$${todPnlV.toFixed(0)}). Was möchtest du wissen?`;
+    }
+    if(msg.includes("heute")||msg.includes("today")){
+      if(todayT.length===0)return `Heute (${tod}) noch keine Trades. Dein ${tod}-WR historisch: ${dayWR}%. ${inWindow?"Trading-Fenster ist OFFEN.":"Trading-Fenster: 16:15–17:30."}`;
+      return `Heute: ${todayT.length} Trades, P&L: ${todPnlV>=0?"+":""}$${todPnlV.toFixed(0)}. ${todayT.length>=2?"LIMIT erreicht – nicht mehr traden!":`Noch ${2-todayT.length} Trade möglich.`}`;
+    }
+    if(msg.includes("wie ist")||msg.includes("performance")||msg.includes("stats")){
+      const best=Object.entries(dayMap).filter(([_,v])=>v.n>=3).sort((a,b)=>(b[1].w/b[1].n)-(a[1].w/a[1].n))[0];
+      const worst=Object.entries(dayMap).filter(([_,v])=>v.n>=3).sort((a,b)=>(a[1].w/a[1].n)-(b[1].w/b[1].n))[0];
+      return `${t09.length} Trades, ${wr}% WR. Bester Tag: ${best?best[0]+" ("+Math.round(best[1].w/best[1].n*100)+"%)":"–"}. Schlechtester: ${worst?worst[0]+" ("+Math.round(worst[1].w/worst[1].n*100)+"%)":"–"}. Saldo: $${saldo.toFixed(0)}.`;
+    }
+    if(msg.includes("kontoabstand")||msg.includes("dd")||msg.includes("drawdown")){
+      return `Kontoabstand: $${kontoabstand.toFixed(0)} (${Math.round(kontoabstand/BUFFER*100)}% frei von $${BUFFER}). Empfohlen pro Trade: max $${Math.round(kontoabstand*0.02)}. MNQ = $0.50/Tick.`;
+    }
+    if(msg.includes("soll ich")||msg.includes("traden")){
+      if(todayT.length>=2)return `Nein. Du hast schon ${todayT.length}/2 Trades heute. Limit erreicht.`;
+      if(todayBlocked)return `NEIN. Heute gesperrt wegen Overtrading gestern.`;
+      if(dayWR<40&&dayMap[tod]&&dayMap[tod].n>=3)return `Eher nicht. ${tod} ist dein schwacher Tag (${dayWR}% WR). Lieber Pause oder demo.`;
+      if(!inWindow)return `Warte aufs Fenster (16:15–17:30). Aktuell: ${String(hour).padStart(2,"0")}:${String(min).padStart(2,"0")}.`;
+      return `Wenn Setup da ist: ja. Max 1 MNQ, SL bei 40 Ticks (-$20), TP bei 80 Ticks (+$40). Halte dich an Heatmap Correlation SP.`;
+    }
+    if(msg.includes("warum")||msg.includes("why")){
+      return `Verluste meist durch: 1) Zu viele Trades pro Tag (Overtrading) 2) Trades außerhalb 16:15–17:30 3) Emotionales Trading nach Verlust. Schau dir die History an.`;
+    }
+    if(msg.includes("regel")||msg.includes("rule")){
+      return `Deine Regeln: Max 2 Trades/Tag, nur 16:15–17:30, 1 MNQ, 15 Min Pause nach Trade, SL gesetzt, Plan vor Trade. Bei 3 Trades = morgen gesperrt.`;
+    }
+    if(msg.includes("danke")||msg.includes("ty"))return `Gerne. Trade smart, nicht hart. 💪`;
+    
+    // Default analysis
+    return `Aktuell: ${t09.length} Trades, ${wr}% WR, Saldo $${saldo.toFixed(0)}. Heute (${tod}): ${todayT.length}/2 Trades, ${todPnlV>=0?"+":""}$${todPnlV.toFixed(0)}. Frag mich nach: Performance, Stats, "soll ich traden", Regeln, Kontoabstand.`;
   };
 
-  const callAI=async(messages)=>{
-    try{
-      const ctx=buildContext();
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",max_tokens:200,
-          system:ctx,
-          messages:messages.map(m=>({role:m.role,content:m.content}))
-        })
-      });
-      const data=await res.json();
-      return data.content?.[0]?.text||"Fehler beim Laden.";
-    }catch(e){return "Verbindungsfehler.";}
-  };
-
-  const triggerAiPopup=async(type)=>{
+  const triggerAiPopup=(type)=>{
     setAiOpen(true);
-    setAiLoading(true);
-    const prompts={
-      trading_window:"Es ist 16:15 Uhr - das Trading-Fenster ist offen. Gib mir eine kurze Einschätzung für heute basierend auf meinen Stats.",
-      overtrading:"Ich habe heute meinen 3. Trade gemacht - Warnung!",
-      after_trade:"Ich habe gerade einen Trade eingetragen. Kurze Analyse."
-    };
-    const msg={role:"user",content:prompts[type]||prompts.trading_window};
-    const response=await callAI([msg]);
+    const response=smartCoach("",type);
     setAiMessages([{role:"assistant",content:response,auto:true}]);
-    setAiLoading(false);
   };
 
-  const sendAiMessage=async()=>{
+  const sendAiMessage=()=>{
     if(!aiInput.trim())return;
-    const userMsg={role:"user",content:aiInput};
-    const newMsgs=[...aiMessages,userMsg];
-    setAiMessages(newMsgs);
+    const userInput=aiInput;
+    setAiMessages(p=>[...p,{role:"user",content:userInput}]);
     setAiInput("");
-    setAiLoading(true);
-    const response=await callAI(newMsgs.filter(m=>!m.auto));
-    setAiMessages(p=>[...p,{role:"assistant",content:response}]);
-    setAiLoading(false);
+    setTimeout(()=>{
+      const response=smartCoach(userInput,"");
+      setAiMessages(p=>[...p,{role:"assistant",content:response}]);
+    },300);
   };
 
   const addTrade=()=>{
@@ -337,6 +362,10 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
     if(isNaN(v)){showToast("P&L muss eine Zahl sein");return;}
     const newT={id:uid(),acct:"09",contract:form.contract,date:form.date,time:form.time,pnl:v,dur:0,dir:form.dir,setup:form.setup,notes:form.notes,rules:{...form.rules}};
     setTrades(p=>{const updated=[...p,newT];localStorage.setItem('ttp_trades',JSON.stringify(updated));return updated;});
+    const newSaldo=Math.round((saldo+v)*100)/100;
+    setSaldo(newSaldo);
+    localStorage.setItem("ttp_saldo",newSaldo);
+    if(v<0){const newDD=Math.round((ttpDD+Math.abs(v))*100)/100;setTtpDD(newDD);localStorage.setItem("ttp_dd",newDD);}
     setLastTradeAt(new Date());
     setForm(emptyForm());
     showToast("Gespeichert! 15-Min Pause startet...");
@@ -391,10 +420,10 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
     }));
   },[t09]);
 
-  const NAVS=[{k:"dash",icon:"📊",lb:"Dashboard"},{k:"check",icon:"✅",lb:"Pre-Trade"},{k:"log",icon:"➕",lb:"Eintragen"},{k:"analyse",icon:"📈",lb:"Analyse"},{k:"hist",icon:"📋",lb:"History"}];
+  const NAVS=[{k:"dash",icon:"📊",lb:"Dashboard"},{k:"check",icon:"✅",lb:"Regeln"},{k:"log",icon:"➕",lb:"Eintragen"},{k:"analyse",icon:"📈",lb:"Analyse"},{k:"hist",icon:"📋",lb:"History"}];
 
   return(
-    <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:14,paddingBottom:80}}>
+    <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:14,paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))"}}>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
 
       {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#161b22",border:"1px solid "+G,color:G,padding:"10px 20px",borderRadius:10,fontWeight:600,fontSize:13,boxShadow:"0 8px 32px #0008",whiteSpace:"nowrap"}}>{toast}</div>}
@@ -408,10 +437,10 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
         </Card>
       </div>}
 
-      <div style={{background:"#1a1f2e",borderBottom:"1px solid #2d3548",padding:"12px 16px"}}>
+      <div style={{background:"linear-gradient(180deg,#1a1f2e 0%,#161b27 100%)",borderBottom:"1px solid #2d3548",padding:"14px 18px 12px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <div>
-            <div style={{fontWeight:800,fontSize:20}}><span style={{color:B}}>TTP</span> Journal</div>
+            <div style={{fontWeight:800,fontSize:22,letterSpacing:"-0.5px"}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
             <div style={{color:"#6b7280",fontSize:10,marginTop:1}}>Jeronimo – Konto 09</div>
           </div>
           <div style={{fontSize:10,textAlign:"right"}}>
@@ -440,28 +469,28 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
         </div>
       </div>
 
-      <div style={{padding:14,maxWidth:520,margin:"0 auto"}}>
+      <div style={{padding:"16px 16px 20px",maxWidth:520,margin:"0 auto"}}>
 
         {tab==="dash"&&(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
-            {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:10,padding:"10px 14px",display:"flex",gap:12,alignItems:"center"}}>
-              <span style={{fontSize:22}}>⏸</span>
+            {inPause&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:14,alignItems:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 24px rgba(245,158,11,0.15)"}}>
+              <span style={{fontSize:24,filter:"drop-shadow(0 0 8px rgba(245,158,11,0.5))"}}>⏸</span>
               <div style={{flex:1}}>
-                <div style={{color:Y,fontWeight:800,fontSize:13}}>Pflichtpause – {PAUSE_MINS} Min nach Trade</div>
-                <div style={{color:Y,fontWeight:800,fontSize:34,lineHeight:1,letterSpacing:2}}>{pStr}</div>
-                <div style={{color:"#fbbf24",fontSize:11,marginTop:2}}>Kein Impuls-Trade – warte den Timer ab</div>
+                <div style={{color:Y,fontWeight:700,fontSize:13,marginBottom:4,letterSpacing:"-0.2px"}}>Pflichtpause – {PAUSE_MINS} Min nach Trade</div>
+                <div style={{color:Y,fontWeight:800,fontSize:36,lineHeight:1,letterSpacing:"-1px",fontFamily:"-apple-system,system-ui"}}>{pStr}</div>
+                <div style={{color:"#fbbf24",fontSize:11,marginTop:5,opacity:0.9}}>Kein Impuls-Trade – warte den Timer ab</div>
               </div>
             </div>}
 
-            {todayBlocked&&!inPause&&<div style={{background:R+"22",border:"1px solid "+R,borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}}>
-              <span style={{fontSize:18}}>🚫</span>
-              <div><div style={{color:R,fontWeight:800,fontSize:13}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11,marginTop:1}}>Morgen wieder. Heute: analysieren statt traden.</div></div>
+            {todayBlocked&&!inPause&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:14,alignItems:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 24px rgba(239,68,68,0.15)"}}>
+              <span style={{fontSize:22,filter:"drop-shadow(0 0 8px rgba(239,68,68,0.5))"}}>🚫</span>
+              <div style={{flex:1}}><div style={{color:R,fontWeight:700,fontSize:13,marginBottom:3,letterSpacing:"-0.2px"}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11,opacity:0.9,lineHeight:1.5}}>Morgen wieder. Heute: analysieren statt traden.</div></div>
             </div>}
 
-            {overtradingToday&&!todayBlocked&&<div style={{background:R+"22",border:"1px solid "+R,borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}}>
-              <span style={{fontSize:18}}>🚫</span>
-              <div><div style={{color:R,fontWeight:800,fontSize:13}}>3 Trades – Morgen gesperrt!</div><div style={{color:"#fca5a5",fontSize:11,marginTop:1}}>Grenze überschritten. Rechner aus.</div></div>
+            {overtradingToday&&!todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:14,alignItems:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 24px rgba(239,68,68,0.15)"}}>
+              <span style={{fontSize:22,filter:"drop-shadow(0 0 8px rgba(239,68,68,0.5))"}}>🚫</span>
+              <div style={{flex:1}}><div style={{color:R,fontWeight:700,fontSize:13,marginBottom:3,letterSpacing:"-0.2px"}}>3 Trades – Morgen gesperrt!</div><div style={{color:"#fca5a5",fontSize:11,opacity:0.9,lineHeight:1.5}}>Grenze überschritten. Rechner aus.</div></div>
             </div>}
 
             {atLimit&&!overtradingToday&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}}>
@@ -634,7 +663,7 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
               <div style={{color:"#6b7280",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Noch nicht – warte auf 16:15 Uhr"}</div>
             </Card>
             {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card>
-              <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>Pre-Trade Checkliste</div>
+              <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>Pre-Trade Regelnliste</div>
               {[{id:"c1",q:"Geplantes Setup – kein Impuls?"},{id:"c2",q:"SL und TP definiert?"},{id:"c3",q:"Emotional ruhig und klar?"},{id:"c4",q:"Nach 16:15 Uhr?"}].map(it=>(
                 <Chk key={it.id} checked={checks[it.id]} onClick={()=>setChecks(p=>({...p,[it.id]:!p[it.id]}))} label={it.q}/>
               ))}
@@ -838,12 +867,12 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
 
       </div>
 
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#1a1f2e",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,maxWidth:520,margin:"0 auto"}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(26,31,46,0.95)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,maxWidth:520,margin:"0 auto",paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
-          <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:"#6b7280",padding:"8px 0 10px",fontSize:10,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative"}}>
-            <span style={{fontSize:16,lineHeight:"1"}}>{nav.icon}</span>
-            {nav.lb.toUpperCase()}
-            {nav.k==="log"&&inPause&&<div style={{position:"absolute",top:4,right:"12%",width:7,height:7,borderRadius:"50%",background:Y}}/>}
+          <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:"#6b7280",padding:"10px 2px 12px",fontSize:9,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:600,letterSpacing:"0.3px"}}>
+            <span style={{fontSize:17,lineHeight:"1"}}>{nav.icon}</span>
+            <span style={{whiteSpace:"nowrap"}}>{nav.lb.toUpperCase()}</span>
+            {nav.k==="log"&&inPause&&<div style={{position:"absolute",top:6,right:"15%",width:7,height:7,borderRadius:"50%",background:Y}}/>}
           </button>
         ))}
       </div>
@@ -851,7 +880,7 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
       {/* AI TRADING PARTNER */}
       <div style={{position:"fixed",bottom:80,right:16,zIndex:200}}>
         {!aiOpen&&(
-          <button onClick={()=>{setAiOpen(true);if(aiMessages.length===0){setAiLoading(true);callAI([{role:"user",content:"Hallo! Gib mir einen kurzen Überblick über meine Trading-Performance."}]).then(r=>{setAiMessages([{role:"assistant",content:r}]);setAiLoading(false);});}}} 
+          <button onClick={()=>{setAiOpen(true);if(aiMessages.length===0){const r=smartCoach("hallo","");setAiMessages([{role:"assistant",content:r}]);}}} 
             style={{width:52,height:52,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#a855f7)",border:"none",fontSize:22,boxShadow:"0 4px 20px #6366f144",display:"flex",alignItems:"center",justifyContent:"center"}}>
             🤖
           </button>
@@ -862,8 +891,8 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <span style={{fontSize:18}}>🤖</span>
                 <div>
-                  <div style={{fontWeight:700,fontSize:13,color:B}}>Claude – Trading Coach</div>
-                  <div style={{color:"#6b7280",fontSize:10}}>Dein KI Trading Partner</div>
+                  <div style={{fontWeight:700,fontSize:13,color:B}}>MindRisk Coach</div>
+                  <div style={{color:"#6b7280",fontSize:10}}>Dein Trading Partner</div>
                 </div>
               </div>
               <button onClick={()=>setAiOpen(false)} style={{background:"none",color:"#6b7280",fontSize:18,padding:"2px 6px"}}>×</button>
