@@ -847,7 +847,6 @@ Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber mot
           </button>
         ))}
       </div>
-    </div>
 
       {/* AI TRADING PARTNER */}
       <div style={{position:"fixed",bottom:80,right:16,zIndex:200}}>
