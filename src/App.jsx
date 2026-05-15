@@ -123,7 +123,7 @@ const Chk=({checked,onClick,label})=>(
 );
 
 export default function App(){
-  const[trades,setTrades]=useState(SEED);
+  const[trades,setTrades]=useState(()=>{try{const s=localStorage.getItem('ttp_trades');return s?JSON.parse(s):SEED;}catch(e){return SEED;}});
   const[tab,setTab]=useState("dash");
   const[toast,setToast]=useState("");
   const[delId,setDelId]=useState(null);
@@ -248,7 +248,8 @@ export default function App(){
     if(!form.pnl){showToast("Bitte P&L eingeben");return;}
     const v=parseFloat(form.pnl);
     if(isNaN(v)){showToast("P&L muss eine Zahl sein");return;}
-    setTrades(p=>[...p,{id:uid(),acct:"09",contract:form.contract,date:form.date,time:form.time,pnl:v,dur:0,dir:form.dir,setup:form.setup,notes:form.notes,rules:{...form.rules}}]);
+    const newT={id:uid(),acct:"09",contract:form.contract,date:form.date,time:form.time,pnl:v,dur:0,dir:form.dir,setup:form.setup,notes:form.notes,rules:{...form.rules}};
+    setTrades(p=>{const updated=[...p,newT];localStorage.setItem('ttp_trades',JSON.stringify(updated));return updated;});
     setLastTradeAt(new Date());
     setForm(emptyForm());
     showToast("Gespeichert! 15-Min Pause startet...");
@@ -724,3 +725,4 @@ export default function App(){
     </div>
   );
 }
+
