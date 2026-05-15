@@ -127,6 +127,11 @@ export default function App(){
   const[tab,setTab]=useState("dash");
   const[toast,setToast]=useState("");
   const[delId,setDelId]=useState(null);
+  const[aiOpen,setAiOpen]=useState(false);
+  const[aiMessages,setAiMessages]=useState([]);
+  const[aiInput,setAiInput]=useState("");
+  const[aiLoading,setAiLoading]=useState(false);
+  const[aiAutoShown,setAiAutoShown]=useState({});
   const[checks,setChecks]=useState({c1:false,c2:false,c3:false,c4:false});
   const[form,setForm]=useState(emptyForm());
   const[goals,setGoals]=useState({pnl:300,disc:80});
@@ -141,6 +146,25 @@ export default function App(){
     const id=setInterval(()=>setTick(t=>t+1),1000);
     return()=>clearInterval(id);
   },[]);
+
+  // Auto-popup triggers
+  useEffect(()=>{
+    const h=new Date().getHours(),m=new Date().getMinutes();
+    const todayT=t09.filter(t=>t.date===todayISO());
+    const key16=todayISO()+"_16";
+    const keyOT=todayISO()+"_ot";
+    
+    // 16:15 Trading window popup
+    if(h===16&&m>=15&&m<=20&&!aiAutoShown[key16]&&!todayBlocked){
+      setAiAutoShown(p=>({...p,[key16]:true}));
+      triggerAiPopup("trading_window");
+    }
+    // Overtrading warning
+    if(todayT.length>=OVERTRADING_AT&&!aiAutoShown[keyOT]){
+      setAiAutoShown(p=>({...p,[keyOT]:true}));
+      triggerAiPopup("overtrading");
+    }
+  },[tick]);
 
   const now=new Date();
   const msSince=lastTradeAt?now-lastTradeAt:999999;
@@ -244,6 +268,69 @@ export default function App(){
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2800);};
 
+  const buildContext=()=>{
+    const wins=t09.filter(t=>t.pnl>0).length;
+    const wr=t09.length?Math.round(wins/t09.length*100):0;
+    const todayT=t09.filter(t=>t.date===todayISO());
+    const todPnl=Math.round(todayT.reduce((s,t)=>s+t.pnl,0)*100)/100;
+    const DAYS=["So","Mo","Di","Mi","Do","Fr","Sa"];
+    const tod=DAYS[new Date().getDay()];
+    const m={};t09.forEach(t=>{const d=DAYS[new Date(t.date).getDay()];if(!m[d])m[d]={wins:0,n:0};m[d].n++;if(t.pnl>0)m[d].wins++;});
+    const dayWR=m[tod]?Math.round(m[tod].wins/m[tod].n*100):0;
+    const last5=t09.slice(-5).map(t=>`${t.date} ${t.contract} ${t.dir} ${t.pnl>=0?"+":""}$${t.pnl.toFixed(0)}`).join(", ");
+    return `Du bist Jeronimo, NQ/MNQ Futures Trader bei TTP (The Trading Pit). 
+Konto: P1-235109, Saldo: $${saldo.toFixed(2)}, Kontoabstand: $${kontoabstand.toFixed(0)}
+Gesamtstatistik: ${t09.length} Trades, ${wr}% Trefferquote
+Heute (${todayISO()}, ${tod}): ${todayT.length} Trades, P&L: ${todPnl>=0?"+":""}$${Math.abs(todPnl).toFixed(0)}
+${tod} Trefferquote historisch: ${dayWR}%
+Letzte 5 Trades: ${last5}
+Hauptproblem: Overtrading (${t09.length>0?Math.round(t09.filter(t=>{const m2={};t09.filter(x=>x.date===t.date).forEach(x=>x);return t09.filter(x=>x.date===t.date).length>=3}).length/t09.length*100):0}% der Trades an Overtrading-Tagen)
+Regeln: Max 2 Trades/Tag, nur 16:15-17:30 Uhr, 1 MNQ Kontrakt, 15 Min Pause nach Trade
+Antworten auf Deutsch, kurz und direkt (max 3 Sätze), wie ein strenger aber motivierender Trading-Coach.`;
+  };
+
+  const callAI=async(messages)=>{
+    try{
+      const ctx=buildContext();
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",max_tokens:200,
+          system:ctx,
+          messages:messages.map(m=>({role:m.role,content:m.content}))
+        })
+      });
+      const data=await res.json();
+      return data.content?.[0]?.text||"Fehler beim Laden.";
+    }catch(e){return "Verbindungsfehler.";}
+  };
+
+  const triggerAiPopup=async(type)=>{
+    setAiOpen(true);
+    setAiLoading(true);
+    const prompts={
+      trading_window:"Es ist 16:15 Uhr - das Trading-Fenster ist offen. Gib mir eine kurze Einschätzung für heute basierend auf meinen Stats.",
+      overtrading:"Ich habe heute meinen 3. Trade gemacht - Warnung!",
+      after_trade:"Ich habe gerade einen Trade eingetragen. Kurze Analyse."
+    };
+    const msg={role:"user",content:prompts[type]||prompts.trading_window};
+    const response=await callAI([msg]);
+    setAiMessages([{role:"assistant",content:response,auto:true}]);
+    setAiLoading(false);
+  };
+
+  const sendAiMessage=async()=>{
+    if(!aiInput.trim())return;
+    const userMsg={role:"user",content:aiInput};
+    const newMsgs=[...aiMessages,userMsg];
+    setAiMessages(newMsgs);
+    setAiInput("");
+    setAiLoading(true);
+    const response=await callAI(newMsgs.filter(m=>!m.auto));
+    setAiMessages(p=>[...p,{role:"assistant",content:response}]);
+    setAiLoading(false);
+  };
+
   const addTrade=()=>{
     if(!form.pnl){showToast("Bitte P&L eingeben");return;}
     const v=parseFloat(form.pnl);
@@ -254,6 +341,7 @@ export default function App(){
     setForm(emptyForm());
     showToast("Gespeichert! 15-Min Pause startet...");
     setTab("dash");
+    setTimeout(()=>triggerAiPopup("after_trade"),1000);
   };
 
   const renderCal=()=>{
@@ -288,11 +376,26 @@ export default function App(){
   const chiH=new Date(nowD.toLocaleString("en-US",{timeZone:"America/Chicago"})).getHours();
   const lonOpen=lonH>=8&&lonH<16;
   const chiOpen=chiH>=8&&chiH<15;
+  const monthlyStats=useMemo(()=>{
+    const m={};
+    t09.forEach(t=>{
+      const mo=t.date.slice(0,7);
+      if(!m[mo])m[mo]={pnl:0,trades:0,wins:0,losses:0,days:new Set()};
+      m[mo].pnl+=t.pnl;m[mo].trades++;m[mo].days.add(t.date);
+      if(t.pnl>0)m[mo].wins++;else m[mo].losses++;
+    });
+    return Object.entries(m).sort(([a],[b])=>b.localeCompare(a)).map(([mo,v])=>({
+      mo,pnl:Math.round(v.pnl*100)/100,
+      trades:v.trades,wins:v.wins,losses:v.losses,
+      wr:Math.round(v.wins/v.trades*100),days:v.days.size
+    }));
+  },[t09]);
+
   const NAVS=[{k:"dash",icon:"📊",lb:"Dashboard"},{k:"check",icon:"✅",lb:"Pre-Trade"},{k:"log",icon:"➕",lb:"Eintragen"},{k:"analyse",icon:"📈",lb:"Analyse"},{k:"hist",icon:"📋",lb:"History"}];
 
   return(
     <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:14,paddingBottom:80}}>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
 
       {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#161b22",border:"1px solid "+G,color:G,padding:"10px 20px",borderRadius:10,fontWeight:600,fontSize:13,boxShadow:"0 8px 32px #0008",whiteSpace:"nowrap"}}>{toast}</div>}
       {delId&&<div style={{position:"fixed",inset:0,zIndex:998,background:"#000c",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -440,27 +543,29 @@ export default function App(){
               </div>
             </Card>
 
-            <Card>
-              <div style={{fontWeight:700,marginBottom:4}}>Beste Handelstage</div>
-              <div style={{color:"#6b7280",fontSize:11,marginBottom:10}}>% profitable Tage pro Wochentag</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
-                {weekdayStats.map(d=>{
-                  const c=d.pct>=60?G:d.pct>=40?Y:R;
-                  return(
-                    <div key={d.label} style={{background:"#0f1117",borderRadius:8,padding:"8px 4px",textAlign:"center",border:"1px solid "+(d.days>0?c+"44":"#2d3548")}}>
-                      <div style={{fontWeight:700,fontSize:13,marginBottom:3,color:d.days>0?c:"#4b5563"}}>{d.label}</div>
-                      {d.days>0?(<>
-                        <div style={{color:c,fontWeight:800,fontSize:17}}>{d.pct}%</div>
-                        <div style={{color:"#6b7280",fontSize:8,marginTop:1}}>Gewinn</div>
-                        <div style={{color:pc(d.pnl),fontSize:10,fontWeight:700,marginTop:4}}>{d.pnl>=0?"+":"-"}${Math.abs(d.pnl).toFixed(0)}</div>
-                        <div style={{color:"#6b7280",fontSize:8}}>{d.days}T</div>
-                      </>):<div style={{color:"#4b5563",fontSize:10,marginTop:6}}>–</div>}
-                    </div>
-                  );
-                })}
+            <Card style={{borderColor:P+"33"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontWeight:700}}>Monatsziel – {todayISO().slice(0,7)}</div>
+                <button onClick={()=>setTab("analyse")} style={{background:"none",color:P,fontSize:12}}>bearbeiten</button>
               </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#6b7280",fontSize:10}}>P&L</span><span style={{color:pc(monthPnl),fontSize:10,fontWeight:700}}>{fs(monthPnl)} / ${goals.pnl}</span></div><Bar2 pct={Math.min(100,Math.max(0,monthPnl)/goals.pnl*100)} color={monthPnl>=goals.pnl?G:B}/></div>
+                <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#6b7280",fontSize:10}}>Regelquote</span><span style={{color:sc(disc),fontSize:10,fontWeight:700}}>{disc}% / {goals.disc}%</span></div><Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/></div>
+              </div>
+              {(()=>{
+                const eom=new Date(now.getFullYear(),now.getMonth()+1,0);
+                const tLeft=Math.max(1,Math.round((eom-now)/86400000*5/7));
+                const needed=Math.round(goals.pnl-monthPnl);
+                const perDay=needed>0?Math.ceil(needed/tLeft):0;
+                return needed>0?(
+                  <div style={{background:"#0f1117",borderRadius:8,padding:10,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,textAlign:"center"}}>
+                    <div><div style={{color:"#6b7280",fontSize:9}}>HANDELSTAGE</div><div style={{color:B,fontWeight:800,fontSize:16}}>{tLeft}</div></div>
+                    <div style={{borderLeft:"1px solid #2d3548",borderRight:"1px solid #2d3548"}}><div style={{color:"#6b7280",fontSize:9}}>PRO TAG</div><div style={{color:Y,fontWeight:800,fontSize:16}}>${perDay}</div></div>
+                    <div><div style={{color:"#6b7280",fontSize:9}}>PRO TRADE</div><div style={{color:Y,fontWeight:800,fontSize:16}}>${Math.ceil(perDay/2)}</div></div>
+                  </div>
+                ):<div style={{color:G,fontWeight:700,textAlign:"center",padding:6}}>Monatsziel erreicht! 🎉</div>;
+              })()}
             </Card>
-
             {profitPlan&&(
               <Card style={{borderColor:G+"33",background:"#0a160f"}}>
                 <div style={{fontWeight:700,fontSize:15,marginBottom:3,color:G}}>Weg zur Profitabilitaet</div>
@@ -504,29 +609,6 @@ export default function App(){
               </Card>
             )}
 
-            <Card style={{borderColor:P+"33"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{fontWeight:700}}>Monatsziel – {todayISO().slice(0,7)}</div>
-                <button onClick={()=>setTab("analyse")} style={{background:"none",color:P,fontSize:12}}>bearbeiten</button>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#6b7280",fontSize:10}}>P&L</span><span style={{color:pc(monthPnl),fontSize:10,fontWeight:700}}>{fs(monthPnl)} / ${goals.pnl}</span></div><Bar2 pct={Math.min(100,Math.max(0,monthPnl)/goals.pnl*100)} color={monthPnl>=goals.pnl?G:B}/></div>
-                <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#6b7280",fontSize:10}}>Regelquote</span><span style={{color:sc(disc),fontSize:10,fontWeight:700}}>{disc}% / {goals.disc}%</span></div><Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/></div>
-              </div>
-              {(()=>{
-                const eom=new Date(now.getFullYear(),now.getMonth()+1,0);
-                const tLeft=Math.max(1,Math.round((eom-now)/86400000*5/7));
-                const needed=Math.round(goals.pnl-monthPnl);
-                const perDay=needed>0?Math.ceil(needed/tLeft):0;
-                return needed>0?(
-                  <div style={{background:"#0f1117",borderRadius:8,padding:10,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,textAlign:"center"}}>
-                    <div><div style={{color:"#6b7280",fontSize:9}}>HANDELSTAGE</div><div style={{color:B,fontWeight:800,fontSize:16}}>{tLeft}</div></div>
-                    <div style={{borderLeft:"1px solid #2d3548",borderRight:"1px solid #2d3548"}}><div style={{color:"#6b7280",fontSize:9}}>PRO TAG</div><div style={{color:Y,fontWeight:800,fontSize:16}}>${perDay}</div></div>
-                    <div><div style={{color:"#6b7280",fontSize:9}}>PRO TRADE</div><div style={{color:Y,fontWeight:800,fontSize:16}}>${Math.ceil(perDay/2)}</div></div>
-                  </div>
-                ):<div style={{color:G,fontWeight:700,textAlign:"center",padding:6}}>Monatsziel erreicht! 🎉</div>;
-              })()}
-            </Card>
 
           </div>
         )}
@@ -640,6 +722,27 @@ export default function App(){
                 <div><label style={{color:"#6b7280",fontSize:10,display:"block",marginBottom:4}}>REGELQUOTE (%)</label><input type="number" defaultValue={goals.disc} onBlur={e=>setGoals(g=>({...g,disc:parseInt(e.target.value)||80}))}/></div>
               </div>
             </Card>
+
+<Card>
+              <div style={{fontWeight:700,marginBottom:4}}>Beste Handelstage</div>
+              <div style={{color:"#6b7280",fontSize:11,marginBottom:10}}>% profitable Tage pro Wochentag</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
+                {weekdayStats.map(d=>{
+                  const c=d.pct>=60?G:d.pct>=40?Y:R;
+                  return(
+                    <div key={d.label} style={{background:"#0f1117",borderRadius:8,padding:"8px 4px",textAlign:"center",border:"1px solid "+(d.days>0?c+"44":"#2d3548")}}>
+                      <div style={{fontWeight:700,fontSize:13,marginBottom:3,color:d.days>0?c:"#4b5563"}}>{d.label}</div>
+                      {d.days>0?(<>
+                        <div style={{color:c,fontWeight:800,fontSize:17}}>{d.pct}%</div>
+                        <div style={{color:"#6b7280",fontSize:8,marginTop:1}}>Gewinn</div>
+                        <div style={{color:pc(d.pnl),fontSize:10,fontWeight:700,marginTop:4}}>{d.pnl>=0?"+":"-"}${Math.abs(d.pnl).toFixed(0)}</div>
+                        <div style={{color:"#6b7280",fontSize:8}}>{d.days}T</div>
+                      </>):<div style={{color:"#4b5563",fontSize:10,marginTop:6}}>–</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
             <Card>
               <div style={{fontWeight:700,marginBottom:10}}>Haltedauer Analyse</div>
               {durBuckets.map(b=>(
@@ -682,6 +785,28 @@ export default function App(){
 
         {tab==="hist"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <Card>
+              <div style={{fontWeight:700,fontSize:15,marginBottom:10}}>Jahresübersicht</div>
+              {monthlyStats.map(ms=>(
+                <div key={ms.mo} style={{marginBottom:8,background:"#0f1117",borderRadius:8,padding:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <div style={{fontWeight:700,fontSize:13}}>{ms.mo}</div>
+                    <div style={{color:pc(ms.pnl),fontWeight:800,fontSize:15}}>{ms.pnl>=0?"+":"-"}${Math.abs(ms.pnl).toFixed(0)}</div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,fontSize:10}}>
+                    <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>Trades</div><div style={{fontWeight:700}}>{ms.trades}</div></div>
+                    <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>WR</div><div style={{color:ms.wr>=50?G:R,fontWeight:700}}>{ms.wr}%</div></div>
+                    <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>TP</div><div style={{color:G,fontWeight:700}}>{ms.wins}</div></div>
+                    <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>SL</div><div style={{color:R,fontWeight:700}}>{ms.losses}</div></div>
+                  </div>
+                  <div style={{marginTop:4}}>
+                    <div style={{height:4,borderRadius:2,background:"#2d3548"}}>
+                      <div style={{height:"100%",borderRadius:2,width:ms.wr+"%",background:ms.wr>=50?G:R}}/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </Card>
             <div style={{color:"#6b7280",fontSize:12,marginBottom:2}}>{t09.length} Trades – Regelquote: {disc}%</div>
             {[...t09].reverse().map(t=>{
               const rv=t.rules||{},kk=Object.keys(rv);
@@ -723,6 +848,57 @@ export default function App(){
         ))}
       </div>
     </div>
+
+      {/* AI TRADING PARTNER */}
+      <div style={{position:"fixed",bottom:80,right:16,zIndex:200}}>
+        {!aiOpen&&(
+          <button onClick={()=>{setAiOpen(true);if(aiMessages.length===0){setAiLoading(true);callAI([{role:"user",content:"Hallo! Gib mir einen kurzen Überblick über meine Trading-Performance."}]).then(r=>{setAiMessages([{role:"assistant",content:r}]);setAiLoading(false);});}}} 
+            style={{width:52,height:52,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#a855f7)",border:"none",fontSize:22,boxShadow:"0 4px 20px #6366f144",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            🤖
+          </button>
+        )}
+        {aiOpen&&(
+          <div style={{width:320,maxWidth:"calc(100vw - 32px)",background:"#1a1f2e",border:"1px solid #6366f1",borderRadius:16,boxShadow:"0 8px 32px #0008",display:"flex",flexDirection:"column",maxHeight:420}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #2d3548",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{fontSize:18}}>🤖</span>
+                <div>
+                  <div style={{fontWeight:700,fontSize:13,color:B}}>Claude – Trading Coach</div>
+                  <div style={{color:"#6b7280",fontSize:10}}>Dein KI Trading Partner</div>
+                </div>
+              </div>
+              <button onClick={()=>setAiOpen(false)} style={{background:"none",color:"#6b7280",fontSize:18,padding:"2px 6px"}}>×</button>
+            </div>
+            <div style={{flex:1,overflow:"auto",padding:12,display:"flex",flexDirection:"column",gap:8,minHeight:120}}>
+              {aiMessages.length===0&&!aiLoading&&(
+                <div style={{color:"#6b7280",fontSize:12,textAlign:"center",padding:16}}>Tippe eine Frage oder warte auf automatische Analyse...</div>
+              )}
+              {aiMessages.map((m,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+                  <div style={{maxWidth:"85%",padding:"8px 12px",borderRadius:12,background:m.role==="user"?B+"33":"#0f1117",border:"1px solid "+(m.role==="user"?B+"44":"#2d3548"),fontSize:12,color:m.role==="user"?"#c7d2fe":"#e2e8f0",lineHeight:1.4}}>
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {aiLoading&&(
+                <div style={{display:"flex",gap:4,padding:8}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:B,animation:"pulse 1s infinite"}}/>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:B,animation:"pulse 1s infinite 0.2s"}}/>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:B,animation:"pulse 1s infinite 0.4s"}}/>
+                </div>
+              )}
+            </div>
+            <div style={{padding:"8px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:8}}>
+              <input value={aiInput} onChange={e=>setAiInput(e.target.value)} 
+                onKeyDown={e=>e.key==="Enter"&&sendAiMessage()}
+                placeholder="Frag deinen Trading Coach..." 
+                style={{flex:1,fontSize:12,padding:"6px 10px",borderRadius:8}}/>
+              <button onClick={sendAiMessage} disabled={aiLoading||!aiInput.trim()} 
+                style={{background:B,color:"#fff",padding:"6px 12px",borderRadius:8,fontSize:12,fontWeight:700,opacity:aiLoading||!aiInput.trim()?0.5:1}}>→</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
-
