@@ -133,7 +133,13 @@ export default function App(){
   const[aiInput,setAiInput]=useState("");
   const[aiLoading,setAiLoading]=useState(false);
   const[aiAutoShown,setAiAutoShown]=useState({});
-  const[checks,setChecks]=useState({c1:false,c2:false,c3:false,c4:false});
+  const[checks,setChecks]=useState(()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem('ttp_checks')||'{}');
+      if(saved.date===todayISO())return saved.data||{c1:false,c2:false,c3:false,c4:false};
+    }catch(e){}
+    return{c1:false,c2:false,c3:false,c4:false};
+  });
   const[form,setForm]=useState(emptyForm());
   const[goals,setGoals]=useState({pnl:300,disc:80});
   const[journal,setJournal]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_journal')||'{}');}catch(e){return{};}});
@@ -419,6 +425,9 @@ export default function App(){
     showToast("Gespeichert! 15-Min Pause startet...");
     setTab("dash");
     setTimeout(()=>triggerAiPopup("after_trade"),1000);
+    // Reset pre-trade checks - must check again before next trade
+    setChecks({c1:false,c2:false,c3:false,c4:false});
+    localStorage.removeItem("ttp_checks");
   };
 
   const renderCal=()=>{
@@ -728,13 +737,13 @@ export default function App(){
             {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card>
               <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>Pre-Trade Regelnliste</div>
               {[{id:"c1",q:"Geplantes Setup – kein Impuls?"},{id:"c2",q:"SL und TP definiert?"},{id:"c3",q:"Emotional ruhig und klar?"},{id:"c4",q:"Nach 16:15 Uhr?"}].map(it=>(
-                <Chk key={it.id} checked={checks[it.id]} onClick={()=>setChecks(p=>({...p,[it.id]:!p[it.id]}))} label={it.q}/>
+                <Chk key={it.id} checked={checks[it.id]} onClick={()=>{const newChecks={...checks,[it.id]:!checks[it.id]};setChecks(newChecks);localStorage.setItem("ttp_checks",JSON.stringify({date:todayISO(),data:newChecks}));}} label={it.q}/>
               ))}
               <div style={{marginTop:12,background:allChecked?G+"22":R+"11",border:"1px solid "+(allChecked?G:R)+"44",borderRadius:10,padding:12,textAlign:"center"}}>
                 {allChecked?<div><div style={{color:G,fontWeight:800,fontSize:17}}>GRUENES LICHT</div><div style={{color:"#6b7280",fontSize:11,marginTop:3}}>1 MNQ | SL {Math.round(kontoabstand*0.02/0.5)} Ticks (${Math.round(kontoabstand*0.02)}) | TP {Math.round(kontoabstand*0.04/0.5)} Ticks</div></div>
                 :<div style={{color:R,fontWeight:700,fontSize:15}}>Noch nicht bereit</div>}
               </div>
-              <button onClick={()=>setChecks({c1:false,c2:false,c3:false,c4:false})} style={{background:"none",color:"#6b7280",fontSize:12,padding:"7px 0",width:"100%",marginTop:6}}>Zuruecksetzen</button>
+              <button onClick={()=>{setChecks({c1:false,c2:false,c3:false,c4:false});localStorage.removeItem("ttp_checks");}} style={{background:"none",color:"#6b7280",fontSize:12,padding:"7px 0",width:"100%",marginTop:6}}>Zuruecksetzen</button>
             </Card>}
             <Card style={{background:"#12101a",borderColor:P+"33"}}>
               <div style={{color:P,fontWeight:700,marginBottom:8}}>Meine Regeln</div>
@@ -749,12 +758,38 @@ export default function App(){
 
         {tab==="log"&&(
           <div>
+            {!allChecked&&!inPause&&!todayBlocked&&!atLimit&&(
+              <div style={{background:"linear-gradient(135deg,rgba(239,68,68,0.12) 0%,rgba(245,158,11,0.08) 100%)",border:"2px solid rgba(239,68,68,0.5)",borderRadius:14,padding:"18px 18px 16px",marginBottom:14,textAlign:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 24px rgba(239,68,68,0.15)"}}>
+                <div style={{fontSize:42,marginBottom:8,filter:"drop-shadow(0 0 12px rgba(239,68,68,0.4))"}}>🔒</div>
+                <div style={{color:R,fontWeight:800,fontSize:16,marginBottom:6,letterSpacing:"-0.3px"}}>Routine zuerst!</div>
+                <div style={{color:"#fca5a5",fontSize:12,marginBottom:14,lineHeight:1.5}}>Bevor du einen Trade einträgst, gehe deine Pre-Trade Regeln durch.<br/>Disziplin vor Action.</div>
+                <div style={{background:"rgba(0,0,0,0.25)",borderRadius:10,padding:"10px 14px",marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#94a3b8",marginBottom:5}}>
+                    <span>Regeln durch</span>
+                    <span style={{fontWeight:700,color:"#fff"}}>{Object.values(checks).filter(Boolean).length}/4</span>
+                  </div>
+                  <div style={{height:6,borderRadius:3,background:"#2d3548",overflow:"hidden"}}>
+                    <div style={{height:"100%",width:(Object.values(checks).filter(Boolean).length/4*100)+"%",background:"linear-gradient(90deg,#ef4444,#f59e0b,#00d395)",transition:"width .4s"}}/>
+                  </div>
+                </div>
+                <button onClick={()=>setTab("check")} style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"12px 24px",fontWeight:700,fontSize:13,borderRadius:10,boxShadow:"0 4px 16px rgba(99,102,241,0.4)"}}>✅ Zu den Regeln</button>
+              </div>
+            )}
             {(inPause||todayBlocked||atLimit)&&(
               <div style={{background:inPause?"#1a0a00":R+"22",border:"2px solid "+(inPause?Y:R),borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}>
                 {inPause&&<><div style={{color:Y,fontWeight:800,fontSize:15,marginBottom:2}}>⏸ Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:42,letterSpacing:2}}>{pStr}</div><div style={{color:"#fbbf24",fontSize:12,marginTop:3}}>Warte bis der Countdown ablaeuft</div></>}
                 {!inPause&&todayBlocked&&<div style={{color:R,fontWeight:800}}>🚫 Heute gesperrt</div>}
                 {!inPause&&!todayBlocked&&overtradingToday&&<div style={{color:R,fontWeight:800}}>🚫 3 Trades – Morgen gesperrt</div>}
                 {!inPause&&!todayBlocked&&!overtradingToday&&atLimit&&<div style={{color:O,fontWeight:800}}>🛑 Tageslimit {DAILY_LIMIT} Trades – kein 3. Trade!</div>}
+              </div>
+            )}
+            {allChecked&&!inPause&&!todayBlocked&&!atLimit&&(
+              <div style={{background:"linear-gradient(135deg,rgba(0,211,149,0.12) 0%,rgba(99,102,241,0.08) 100%)",border:"1px solid rgba(0,211,149,0.5)",borderRadius:14,padding:"12px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 16px rgba(0,211,149,0.15)"}}>
+                <span style={{fontSize:22,filter:"drop-shadow(0 0 8px rgba(0,211,149,0.5))"}}>✅</span>
+                <div style={{flex:1}}>
+                  <div style={{color:G,fontWeight:800,fontSize:13,letterSpacing:"-0.2px"}}>READY – Routine erfüllt</div>
+                  <div style={{color:"#86efac",fontSize:11,opacity:0.85,marginTop:2}}>Alle 4 Regeln abgehakt. Du kannst traden.</div>
+                </div>
               </div>
             )}
             <Card>
@@ -798,7 +833,7 @@ export default function App(){
                   <span>⏱</span><div style={{color:Y,fontSize:11}}>Nach dem Speichern: 15 Min Pflichtpause startet automatisch</div>
                 </div>
                 <button onClick={addTrade} style={{background:canTrade?B:"#374151",color:"#fff",padding:13,fontSize:14,fontWeight:700,width:"100%",borderRadius:8,opacity:canTrade?1:0.6}} disabled={!canTrade}>
-                  {inPause?"⏸ Warten... "+pStr:todayBlocked?"Heute gesperrt":overtradingToday?"3 Trades – Gesperrt":atLimit?"Limit ("+DAILY_LIMIT+" Trades)":"Trade speichern – Timer startet!"}
+                  {inPause?"⏸ Warten... "+pStr:todayBlocked?"Heute gesperrt":overtradingToday?"3 Trades – Gesperrt":atLimit?"Limit ("+DAILY_LIMIT+" Trades)":!allChecked?"🔒 Erst Regeln abhaken":"Trade speichern – Timer startet!"}
                 </button>
               </div>
             </Card>
@@ -933,9 +968,10 @@ export default function App(){
       <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(26,31,46,0.95)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,maxWidth:520,margin:"0 auto",paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
           <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:"#6b7280",padding:"10px 2px 12px",fontSize:9,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:600,letterSpacing:"0.3px"}}>
-            <span style={{fontSize:17,lineHeight:"1"}}>{nav.icon}</span>
+            <span style={{fontSize:17,lineHeight:"1"}}>{nav.k==="log"&&!allChecked&&!todayBlocked&&!atLimit&&!inPause?"🔒":nav.icon}</span>
             <span style={{whiteSpace:"nowrap"}}>{nav.lb.toUpperCase()}</span>
             {nav.k==="log"&&inPause&&<div style={{position:"absolute",top:6,right:"15%",width:7,height:7,borderRadius:"50%",background:Y}}/>}
+            {nav.k==="check"&&allChecked&&!todayBlocked&&<div style={{position:"absolute",top:6,right:"15%",width:7,height:7,borderRadius:"50%",background:G,boxShadow:"0 0 8px rgba(0,211,149,0.6)"}}/>}
           </button>
         ))}
       </div>
