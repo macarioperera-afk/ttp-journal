@@ -199,6 +199,7 @@ export default function App(){
     }catch(e){return{good:"",bad:"",emotion:""};}
   });
   const[ttpDD,setTtpDD]=useState(()=>parseFloat(localStorage.getItem('ttp_dd')||'781.88'));
+  const[maxDDLevel,setMaxDDLevel]=useState(()=>parseFloat(localStorage.getItem('ttp_maxdd_level')||'49070.80'));
   const[saldo,setSaldo]=useState(()=>parseFloat(localStorage.getItem('ttp_saldo')||'50433.22'));
   const[lastTradeAt,setLastTradeAt]=useState(null);
   const[tick,setTick]=useState(0);
@@ -211,13 +212,9 @@ export default function App(){
   // Splash screen on app open
   useEffect(()=>{
     const t=setTimeout(()=>setShowSplash(false),1800);
-    // After splash, show daily motivation if first time today
+    // After splash, ALWAYS show greeting on app open
     const t2=setTimeout(()=>{
-      const lastShown=localStorage.getItem('ttp_daily_quote');
-      if(lastShown!==todayISO()){
-        localStorage.setItem('ttp_daily_quote',todayISO());
-        triggerAiPopup("daily_motivation");
-      }
+      triggerAiPopup("daily_motivation");
     },2200);
     return()=>{clearTimeout(t);clearTimeout(t2);};
   },[]);
@@ -257,7 +254,7 @@ export default function App(){
 
   const totalPnl=useMemo(()=>t09.reduce((s,t)=>s+t.pnl,0),[t09]);
   const netPnl=useMemo(()=>Math.round(t09.reduce((s,t)=>s+t.pnl,0)*100)/100,[t09]);
-  const kontoabstand=Math.max(0,Math.round((BUFFER-ttpDD)*100)/100);
+  const kontoabstand=Math.max(0,Math.round((saldo-maxDDLevel)*100)/100);
 
   const todT=t09.filter(t=>t.date===todayISO());
   const todPnl=Math.round(todT.reduce((s,t)=>s+t.pnl,0)*100)/100;
@@ -283,7 +280,8 @@ export default function App(){
     const s=new Set();
     overtradingDays.forEach(d=>{
       const dt=new Date(d);dt.setDate(dt.getDate()+1);
-      while(dt.getDay()===0||dt.getDay()===6)dt.setDate(dt.getDate()+1);
+      // If next day is weekend (Sat/Sun), no lock - weekend itself is the natural pause
+      if(dt.getDay()===0||dt.getDay()===6)return;
       s.add(dt.toISOString().split("T")[0]);
     });
     return s;
@@ -476,7 +474,7 @@ export default function App(){
     const newSaldo=Math.round((saldo+v)*100)/100;
     setSaldo(newSaldo);
     localStorage.setItem("ttp_saldo",newSaldo);
-    if(v<0){const newDD=Math.round((ttpDD+Math.abs(v))*100)/100;setTtpDD(newDD);localStorage.setItem("ttp_dd",newDD);}
+
     setLastTradeAt(new Date());
     setForm(emptyForm());
     showToast("Gespeichert! 15-Min Pause startet...");
@@ -578,12 +576,10 @@ export default function App(){
               </div>
             </div>
           </div>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <div style={{background:B+"22",border:"1px solid "+B,borderRadius:20,padding:"6px 14px",fontWeight:700,fontSize:12,color:B}}>P1-235109</div>
-            <button onClick={()=>setSettingsOpen(true)} style={{background:"#2d3548",borderRadius:10,width:36,height:36,padding:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#e2e8f0",fontSize:18}}>☰</button>
-          </div>
+          <button onClick={()=>setSettingsOpen(true)} style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",borderRadius:12,width:42,height:42,padding:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:20,fontWeight:700,boxShadow:"0 2px 12px rgba(99,102,241,0.4)",flexShrink:0}}>☰</button>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <Pill bg={B+"22"} color={B}>P1-235109</Pill>
           <Pill bg={todPnl>=0?G+"22":R+"22"} color={pc(todPnl)}>Heute: {fs(todPnl)}</Pill>
           {inPause&&<Pill bg={Y+"33"} color={Y}>⏸ {pStr}</Pill>}
           <Pill bg={tradesLeft>0&&!todayBlocked&&!atLimit?G+"22":R+"22"} color={tradesLeft>0&&!todayBlocked&&!atLimit?G:R}>
@@ -645,7 +641,7 @@ export default function App(){
               </div>
               <div style={{marginBottom:8}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                  <span style={{color:"#6b7280",fontSize:10}}>Kontoabstand</span>
+                  <span style={{color:"#6b7280",fontSize:10}}>Max DD Abstand</span>
                   <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${kontoabstand.toFixed(0)} frei ({Math.round((1-ttpDD/BUFFER)*100)}%)</span>
                 </div>
                 <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
@@ -669,8 +665,8 @@ export default function App(){
                   <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{fontSize:12,padding:"5px 8px"}}/>
                 </div>
                 <div>
-                  <div style={{color:"#6b7280",fontSize:10,marginBottom:3}}>Max DD genutzt ($):</div>
-                  <input type="number" step="0.01" defaultValue={ttpDD} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setTtpDD(v);localStorage.setItem("ttp_dd",v);}}} style={{fontSize:12,padding:"5px 8px"}}/>
+                  <div style={{color:"#6b7280",fontSize:10,marginBottom:3}}>Max DD Level (aus TTP):</div>
+                  <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{fontSize:12,padding:"5px 8px"}}/>
                 </div>
               </div>
               <div style={{marginTop:10,background:"linear-gradient(135deg,rgba(0,211,149,0.08) 0%,rgba(99,102,241,0.05) 100%)",borderRadius:10,padding:"10px 12px",border:"1px solid "+G+"44"}}>
