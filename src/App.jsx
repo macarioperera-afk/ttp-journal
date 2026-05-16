@@ -543,7 +543,27 @@ export default function App(){
         <div style={{fontSize:11,color:"#6b7280",letterSpacing:"3px",marginBottom:32,animation:"fadeIn 0.8s ease 0.3s both"}}>TRADING JOURNAL</div>
         <div style={{width:48,height:48,borderRadius:"50%",border:"3px solid #2d3548",borderTopColor:B,animation:"spin 0.8s linear infinite"}}/>
       </div>}
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}input,select,textarea{max-width:100%;box-sizing:border-box}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes fadeOut{to{opacity:0;visibility:hidden}}@keyframes scaleIn{from{transform:scale(0.85);opacity:0}to{transform:scale(1);opacity:1}}@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)}50%{box-shadow:0 0 0 12px rgba(245,158,11,0)}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}input,select,textarea{max-width:100%;box-sizing:border-box}
+.mr-content{padding:16px 16px 20px;max-width:520px;margin:0 auto}
+.mr-nav{max-width:520px;margin:0 auto}
+@media (min-width:900px){
+  .mr-content{max-width:1100px;padding:28px 32px 60px}
+  .mr-nav{max-width:1100px}
+  .mr-nav button{padding:14px 8px 16px !important;font-size:11px !important}
+  .mr-nav button span:first-of-type{font-size:22px !important}
+  .mr-grid-2{display:grid !important;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .mr-grid-3{display:grid !important;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:start}
+  .mr-hide-mobile{display:none}
+  .mr-show-desktop{display:block}
+}
+@media (min-width:1200px){
+  .mr-content{max-width:1280px}
+  .mr-grid-2{grid-template-columns:1fr 1fr}
+}
+@media (max-width:899px){
+  .mr-show-desktop{display:none}
+}
+@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes fadeOut{to{opacity:0;visibility:hidden}}@keyframes scaleIn{from{transform:scale(0.85);opacity:0}to{transform:scale(1);opacity:1}}@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)}50%{box-shadow:0 0 0 12px rgba(245,158,11,0)}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
 
       {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#161b22",border:"1px solid "+G,color:G,padding:"10px 20px",borderRadius:10,fontWeight:600,fontSize:13,boxShadow:"0 8px 32px #0008",whiteSpace:"nowrap"}}>{toast}</div>}
       {delId&&<div style={{position:"fixed",inset:0,zIndex:998,background:"#000c",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -597,10 +617,10 @@ export default function App(){
         </div>
       </div>}
       
-      <div style={{padding:"16px 16px 20px",maxWidth:520,margin:"0 auto"}}>
+      <div className="mr-content" style={{padding:"16px 16px 20px",maxWidth:520,margin:"0 auto"}}>
 
         {tab==="dash"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div className="mr-grid-2" style={{display:"flex",flexDirection:"column",gap:12}}>
 
             {inPause&&<div style={{background:"linear-gradient(135deg,rgba(245,158,11,0.15) 0%,rgba(239,68,68,0.08) 100%)",border:"2px solid rgba(245,158,11,0.6)",borderRadius:14,padding:"16px 18px",display:"flex",gap:14,alignItems:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 24px rgba(245,158,11,0.25)",animation:"glowPulse 2s ease infinite"}}>
               <span style={{fontSize:24,filter:"drop-shadow(0 0 8px rgba(245,158,11,0.5))"}}>⏸</span>
@@ -956,7 +976,7 @@ export default function App(){
         )}
 
         {tab==="analyse"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div className="mr-grid-2" style={{display:"flex",flexDirection:"column",gap:12}}>
             <Card style={{borderColor:B+"44"}}>
               <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>Monatsziel setzen</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -1026,7 +1046,7 @@ export default function App(){
         )}
 
         {tab==="hist"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div className="mr-grid-2" style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* Date Range Filter */}
             <Card>
               <div style={{fontWeight:700,fontSize:13,marginBottom:8,letterSpacing:"-0.2px"}}>🔍 Filter</div>
@@ -1130,7 +1150,7 @@ export default function App(){
 
       </div>
 
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(26,31,46,0.95)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,maxWidth:520,margin:"0 auto",paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
+      <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(26,31,46,0.95)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,maxWidth:520,margin:"0 auto",paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
           <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:"#6b7280",padding:"10px 2px 12px",fontSize:9,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:600,letterSpacing:"0.3px"}}>
             <span style={{fontSize:17,lineHeight:"1"}}>{nav.k==="log"&&!allChecked&&!todayBlocked&&!atLimit&&!inPause?"🔒":nav.icon}</span>
