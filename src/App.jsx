@@ -124,6 +124,7 @@ const Chk=({checked,onClick,label})=>(
 
 export default function App(){
   const[trades,setTrades]=useState(()=>{try{const s=localStorage.getItem('ttp_trades');return s?JSON.parse(s):SEED;}catch(e){return SEED;}});
+  const[showSplash,setShowSplash]=useState(true);
   const[tab,setTab]=useState("dash");
   const[toast,setToast]=useState("");
   const[delId,setDelId]=useState(null);
@@ -135,8 +136,13 @@ export default function App(){
   const[checks,setChecks]=useState({c1:false,c2:false,c3:false,c4:false});
   const[form,setForm]=useState(emptyForm());
   const[goals,setGoals]=useState({pnl:300,disc:80});
-  const[journal,setJournal]=useState({});
-  const[todayJ,setTodayJ]=useState({good:"",bad:"",emotion:""});
+  const[journal,setJournal]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_journal')||'{}');}catch(e){return{};}});
+  const[todayJ,setTodayJ]=useState(()=>{
+    try{
+      const j=JSON.parse(localStorage.getItem('ttp_journal')||'{}');
+      return j[todayISO()]||{good:"",bad:"",emotion:""};
+    }catch(e){return{good:"",bad:"",emotion:""};}
+  });
   const[ttpDD,setTtpDD]=useState(()=>parseFloat(localStorage.getItem('ttp_dd')||'781.88'));
   const[saldo,setSaldo]=useState(()=>parseFloat(localStorage.getItem('ttp_saldo')||'50433.22'));
   const[lastTradeAt,setLastTradeAt]=useState(null);
@@ -145,6 +151,20 @@ export default function App(){
   useEffect(()=>{
     const id=setInterval(()=>setTick(t=>t+1),1000);
     return()=>clearInterval(id);
+  },[]);
+
+  // Splash screen on app open
+  useEffect(()=>{
+    const t=setTimeout(()=>setShowSplash(false),1800);
+    // After splash, show daily motivation if first time today
+    const t2=setTimeout(()=>{
+      const lastShown=localStorage.getItem('ttp_daily_quote');
+      if(lastShown!==todayISO()){
+        localStorage.setItem('ttp_daily_quote',todayISO());
+        triggerAiPopup("daily_motivation");
+      }
+    },2200);
+    return()=>{clearTimeout(t);clearTimeout(t2);};
   },[]);
 
   // Auto-popup triggers
@@ -268,8 +288,36 @@ export default function App(){
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2800);};
 
+  // Daily rotating motivation quotes
+  const DAILY_QUOTES=[
+    "Jeden Tag gibt es Chancen, nicht jeder Trade muss mitgemacht werden. 🎯",
+    "Disziplin schlägt Talent. Halte dich an deine Regeln. 💪",
+    "Der beste Trade ist manchmal der, den du nicht machst. 🧘",
+    "Geduld ist deine größte Stärke. Warte auf dein Setup. ⏱",
+    "Heute zählt jede Regel die du befolgst – mehr als jeder Gewinn. ✅",
+    "Konstanz schlägt schnelle Gewinne. Bleib bei deinem Plan. 📊",
+    "Der Markt läuft nicht weg. Atme tief durch. 🌊",
+    "Verluste gehören dazu. Wichtig ist wie du danach reagierst. 🎯",
+    "Du bist ein Trader, kein Spieler. Eindeutig durch Disziplin. 🎓",
+    "Routine ist langweilig – aber sie macht profitable Trader. 🔁",
+    "Ein guter Trader fragt nicht 'wie viel kann ich verdienen', sondern 'wie viel könnte ich verlieren'. 🛡",
+    "Heute keine Trades zu machen ist eine Entscheidung. Eine kluge. 🤔",
+    "Deine Regeln sind dein Schutz. Bricht sie, bricht dein Konto. 🛡️",
+    "Erfolg = (gutes Setup) × (Disziplin) × (Wiederholung). 📈"
+  ];
+  
+  const getDailyQuote=()=>{
+    const dayOfYear=Math.floor((new Date()-new Date(new Date().getFullYear(),0,0))/86400000);
+    return DAILY_QUOTES[dayOfYear%DAILY_QUOTES.length];
+  };
+
   // Smart Trading Coach – analyzes real data
   const smartCoach=(userMsg,trigger)=>{
+    if(trigger==="daily_motivation"){
+      const q=getDailyQuote();
+      return `Guten Morgen Jeronimo! ☀️\n\n${q}\n\nDeine Routine heute: ✅ Regeln durchgehen → ✅ Setup prüfen → ✅ Nur im Fenster (16:15-17:30).`;
+    }
+    
     const wins=t09.filter(t=>t.pnl>0).length;
     const wr=t09.length?Math.round(wins/t09.length*100):0;
     const todayT=t09.filter(t=>t.date===todayISO());
@@ -424,7 +472,14 @@ export default function App(){
 
   return(
     <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:14,paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))"}}>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
+      {showSplash&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"radial-gradient(circle at center,#1a1f2e 0%,#0f1117 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",animation:"fadeOut 0.4s ease 1.4s forwards"}}>
+        <div style={{fontSize:42,fontWeight:900,letterSpacing:"-2px",marginBottom:8,animation:"scaleIn 0.6s ease"}}>
+          <span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span>
+        </div>
+        <div style={{fontSize:11,color:"#6b7280",letterSpacing:"3px",marginBottom:32,animation:"fadeIn 0.8s ease 0.3s both"}}>TRADING JOURNAL</div>
+        <div style={{width:48,height:48,borderRadius:"50%",border:"3px solid #2d3548",borderTopColor:B,animation:"spin 0.8s linear infinite"}}/>
+      </div>}
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes fadeOut{to{opacity:0;visibility:hidden}}@keyframes scaleIn{from{transform:scale(0.85);opacity:0}to{transform:scale(1);opacity:1}}@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)}50%{box-shadow:0 0 0 12px rgba(245,158,11,0)}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
 
       {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#161b22",border:"1px solid "+G,color:G,padding:"10px 20px",borderRadius:10,fontWeight:600,fontSize:13,boxShadow:"0 8px 32px #0008",whiteSpace:"nowrap"}}>{toast}</div>}
       {delId&&<div style={{position:"fixed",inset:0,zIndex:998,background:"#000c",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -469,12 +524,20 @@ export default function App(){
         </div>
       </div>
 
+      {inPause&&<div style={{position:"sticky",top:0,zIndex:90,background:"linear-gradient(135deg,#f59e0b 0%,#ef4444 100%)",padding:"10px 16px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 12px rgba(0,0,0,0.3)",animation:"slideUp 0.3s ease"}}>
+        <span style={{fontSize:18,animation:"pulse 1s infinite"}}>⏸</span>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:800,fontSize:13,color:"#fff",letterSpacing:"-0.2px"}}>PFLICHTPAUSE – {pStr}</div>
+          <div style={{fontSize:10,color:"#fef3c7",opacity:0.9}}>Kein Impuls-Trade! Warte den Timer ab.</div>
+        </div>
+      </div>}
+      
       <div style={{padding:"16px 16px 20px",maxWidth:520,margin:"0 auto"}}>
 
         {tab==="dash"&&(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
-            {inPause&&<div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:14,alignItems:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 24px rgba(245,158,11,0.15)"}}>
+            {inPause&&<div style={{background:"linear-gradient(135deg,rgba(245,158,11,0.15) 0%,rgba(239,68,68,0.08) 100%)",border:"2px solid rgba(245,158,11,0.6)",borderRadius:14,padding:"16px 18px",display:"flex",gap:14,alignItems:"center",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",boxShadow:"0 4px 24px rgba(245,158,11,0.25)",animation:"glowPulse 2s ease infinite"}}>
               <span style={{fontSize:24,filter:"drop-shadow(0 0 8px rgba(245,158,11,0.5))"}}>⏸</span>
               <div style={{flex:1}}>
                 <div style={{color:Y,fontWeight:700,fontSize:13,marginBottom:4,letterSpacing:"-0.2px"}}>Pflichtpause – {PAUSE_MINS} Min nach Trade</div>
@@ -807,7 +870,7 @@ export default function App(){
                   <textarea rows={2} value={todayJ[q.id]||""} onChange={e=>setTodayJ(p=>({...p,[q.id]:e.target.value}))} placeholder={q.p} style={{resize:"vertical"}}/>
                 </div>
               ))}
-              <button onClick={()=>{setJournal(p=>({...p,[todayISO()]:{...todayJ}}));showToast("Reflexion gespeichert!");}} style={{background:P,color:"#fff",padding:11,width:"100%",fontWeight:700,borderRadius:8}}>Speichern</button>
+              <button onClick={()=>{const updated={...journal,[todayISO()]:{...todayJ}};setJournal(updated);localStorage.setItem("ttp_journal",JSON.stringify(updated));showToast("Reflexion gespeichert!");}} style={{background:P,color:"#fff",padding:11,width:"100%",fontWeight:700,borderRadius:8}}>Speichern</button>
             </Card>
           </div>
         )}
