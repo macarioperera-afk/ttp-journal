@@ -135,9 +135,13 @@ export default function App(){
   const[trades,setTrades]=useState(()=>{
     try{
       const v=localStorage.getItem('ttp_data_version');
-      if(v!=='2026-05-15-v2'){
-        localStorage.setItem('ttp_data_version','2026-05-15-v2');
+      if(v!=='2026-05-15-v3'){
+        localStorage.setItem('ttp_data_version','2026-05-15-v3');
         localStorage.setItem('ttp_trades',JSON.stringify(SEED));
+        // Also update saldo to reflect new trade data
+        const seedSum=SEED.filter(t=>t.acct==='09').reduce((s,t)=>s+t.pnl,0);
+        const newSaldo=Math.round((50000+seedSum)*100)/100;
+        localStorage.setItem('ttp_saldo',newSaldo);
         return SEED;
       }
       const s=localStorage.getItem('ttp_trades');
@@ -227,7 +231,7 @@ export default function App(){
           .sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1),[trades]);
 
   const totalPnl=useMemo(()=>t09.reduce((s,t)=>s+t.pnl,0),[t09]);
-  const netPnl=Math.round((saldo-50000)*100)/100;
+  const netPnl=useMemo(()=>Math.round(t09.reduce((s,t)=>s+t.pnl,0)*100)/100,[t09]);
   const kontoabstand=Math.max(0,Math.round((BUFFER-ttpDD)*100)/100);
 
   const todT=t09.filter(t=>t.date===todayISO());
@@ -613,10 +617,15 @@ export default function App(){
               </div>
               <div>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                  <span style={{color:"#6b7280",fontSize:10}}>Heute verloren</span>
-                  <span style={{color:dpD>75?R:G,fontWeight:700,fontSize:10}}>{fs(todPnl)} / $1.000</span>
+                  <span style={{color:"#6b7280",fontSize:10}}>{todPnl>=0?"Heute P&L":"Heute verloren"}</span>
+                  <span style={{color:todPnl>=0?G:dpD>75?R:Y,fontWeight:700,fontSize:10}}>{fs(todPnl)} {todPnl>=0?"(Profit)":"/ -$1.000 Limit"}</span>
                 </div>
-                <Bar2 pct={dpD} color={dpD>75?R:dpD>50?Y:G}/>
+                <div style={{height:8,borderRadius:4,background:"#2d3548",overflow:"hidden",position:"relative"}}>
+                  {todPnl>=0?
+                    <div style={{height:"100%",borderRadius:4,width:Math.min(100,(todPnl/500)*100)+"%",background:"linear-gradient(90deg,#00d395 0%,#10b981 100%)",transition:"width .4s",boxShadow:"0 0 8px rgba(0,211,149,0.4)"}}/>
+                    :<div style={{height:"100%",borderRadius:4,width:dpD+"%",background:dpD>75?"linear-gradient(90deg,#ef4444,#dc2626)":dpD>50?"linear-gradient(90deg,#f59e0b,#ef4444)":"linear-gradient(90deg,#fbbf24,#f59e0b)",transition:"width .4s"}}/>
+                  }
+                </div>
               </div>
               <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 <div>
