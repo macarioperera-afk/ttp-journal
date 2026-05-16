@@ -455,7 +455,13 @@ export default function App(){
   const chiH=new Date(nowD.toLocaleString("en-US",{timeZone:"America/Chicago"})).getHours();
   const lonOpen=lonH>=8&&lonH<16;
   const chiOpen=chiH>=8&&chiH<15;
-  const NAVS=[{k:"dash",icon:"📊",lb:"Dashboard"},{k:"check",icon:"✅",lb:"Regeln"},{k:"log",icon:"📝",lb:"Loggen"},{k:"analyse",icon:"📈",lb:"Analyse"},{k:"hist",icon:"📋",lb:"History"}];
+  const NAVS=[
+  {k:"dash",lb:"Dashboard",svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><polyline points="2,17 8,10 13,14 22,5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="13" cy="14" r="1.5" fill="currentColor"/><line x1="2" y1="21" x2="22" y2="21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/></svg>},
+  {k:"check",lb:"Regeln",svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2 L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/><polyline points="8,12 11,15 16,9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>},
+  {k:"log",lb:"Loggen",svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/><line x1="12" y1="8" x2="12" y2="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>},
+  {k:"analyse",lb:"Analyse",svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 20 Q7 12 10 15 Q13 18 16 8 Q18 2 21 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/><circle cx="21" cy="4" r="2" fill="currentColor" opacity="0.8"/><circle cx="10" cy="15" r="1.5" fill="currentColor" opacity="0.6"/></svg>},
+  {k:"hist",lb:"History",svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="2" rx="1" fill="currentColor" opacity="0.9"/><rect x="3" y="9" width="14" height="2" rx="1" fill="currentColor" opacity="0.7"/><rect x="3" y="14" width="16" height="2" rx="1" fill="currentColor" opacity="0.5"/><rect x="3" y="19" width="10" height="2" rx="1" fill="currentColor" opacity="0.35"/></svg>},
+];
 
   return(
     <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:14,paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))"}}>
@@ -860,9 +866,15 @@ export default function App(){
       {/* BOTTOM NAV */}
       <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(26,31,46,0.95)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
-          <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:"#6b7280",padding:"10px 2px 12px",fontSize:9,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,fontWeight:600}}>
-            <span style={{fontSize:17}}>{nav.k==="log"&&!allChecked&&!todayBlocked&&!atLimit&&!inPause?"🔒":nav.icon}</span>
-            <span>{nav.lb.toUpperCase()}</span>
+          <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:"#4b5563",padding:"10px 2px 11px",fontSize:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
+            <div style={{width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",opacity:tab===nav.k?1:0.55,transform:tab===nav.k?"scale(1.1)":"scale(1)",transition:"all 0.2s"}}>
+              {nav.k==="log"&&!allChecked&&!todayBlocked&&!atLimit&&!inPause
+                ?<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#ef4444" strokeWidth="1.8"/><line x1="12" y1="8" x2="12" y2="16" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/></svg>
+                :nav.svg}
+            </div>
+            <span style={{whiteSpace:"nowrap",color:tab===nav.k?B:"#4b5563"}}>{nav.lb.toUpperCase()}</span>
+            {nav.k==="log"&&inPause&&<div style={{position:"absolute",top:8,right:"14%",width:6,height:6,borderRadius:"50%",background:Y,boxShadow:"0 0 6px "+Y}}/>}
+            {nav.k==="check"&&allChecked&&!todayBlocked&&<div style={{position:"absolute",top:8,right:"14%",width:6,height:6,borderRadius:"50%",background:G,boxShadow:"0 0 8px rgba(0,211,149,0.8)"}}/>}
           </button>
         ))}
       </div>
@@ -896,14 +908,20 @@ export default function App(){
       {/* AI COACH – FUTURISTISCH */}
       <div style={{position:"fixed",bottom:88,right:16,zIndex:200}}>
         {!aiOpen&&(
-          <button
-            onClick={()=>{setAiOpen(true);if(aiMessages.length===0){setAiMessages([{role:"assistant",content:smartCoach("","daily_motivation")}]);}}}
-            style={{width:62,height:62,borderRadius:"50%",background:"radial-gradient(circle at 32% 28%,#e0d4ff 0%,#c4b5fd 12%,#a78bfa 30%,#7c6df2 50%,#5b4dd8 70%,#3b3194 88%,#1e1b4b 100%)",border:"none",padding:0,position:"relative",overflow:"visible",cursor:"pointer",animation:"livingOrb 4s ease-in-out infinite,orbGlow 3s ease-in-out infinite"}}>
-            <div style={{position:"absolute",inset:-6,borderRadius:"50%",border:"1.5px solid transparent",borderTopColor:"rgba(196,181,253,0.7)",borderRightColor:"rgba(168,85,247,0.4)",animation:"orbSpin 5s linear infinite",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",inset:-12,borderRadius:"50%",border:"1px solid transparent",borderBottomColor:"rgba(99,102,241,0.35)",borderLeftColor:"rgba(168,85,247,0.25)",animation:"orbSpin 8s linear infinite reverse",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",top:"50%",left:"50%",width:20,height:20,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(224,212,255,0.7) 30%,rgba(196,181,253,0.3) 60%,transparent 80%)",animation:"orbCore 2.2s ease-in-out infinite",filter:"blur(1px)",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",top:"25%",left:"30%",width:10,height:10,borderRadius:"50%",background:"rgba(255,255,255,0.8)",filter:"blur(3px)",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",bottom:"20%",right:"25%",width:6,height:6,borderRadius:"50%",background:"rgba(196,181,253,0.7)",filter:"blur(2px)",pointerEvents:"none"}}/>
+          <button onClick={()=>{setAiOpen(true);if(aiMessages.length===0){setAiMessages([{role:"assistant",content:smartCoach("","daily_motivation")}]);}}}
+            style={{width:64,height:64,borderRadius:"50%",border:"none",padding:0,position:"relative",overflow:"visible",cursor:"pointer",background:"transparent",WebkitTapHighlightColor:"transparent"}}>
+            {/* Outer glow rings */}
+            <div style={{position:"absolute",inset:-16,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.18) 0%,rgba(168,85,247,0.08) 50%,transparent 70%)",animation:"livingOrb 3s ease-in-out infinite",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",inset:-8,borderRadius:"50%",border:"1px solid rgba(196,181,253,0.25)",borderTopColor:"rgba(196,181,253,0.7)",borderRightColor:"rgba(168,85,247,0.5)",animation:"orbSpin 6s linear infinite",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",inset:-4,borderRadius:"50%",border:"1px solid rgba(99,102,241,0.2)",borderBottomColor:"rgba(99,102,241,0.6)",borderLeftColor:"rgba(168,85,247,0.3)",animation:"orbSpin 10s linear infinite reverse",pointerEvents:"none"}}/>
+            {/* Main sphere */}
+            <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"radial-gradient(circle at 35% 30%,#ddd6fe 0%,#a78bfa 20%,#7c3aed 45%,#4c1d95 70%,#1e1b4b 100%)",animation:"livingOrb 3s ease-in-out infinite,orbGlow 2.5s ease-in-out infinite",boxShadow:"inset 0 0 20px rgba(196,181,253,0.3)"}}/>
+            {/* Inner shimmer */}
+            <div style={{position:"absolute",top:"18%",left:"22%",width:22,height:22,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.9) 0%,rgba(221,214,254,0.5) 40%,transparent 70%)",filter:"blur(4px)",animation:"orbCore 2s ease-in-out infinite",pointerEvents:"none"}}/>
+            {/* Neural dots */}
+            <div style={{position:"absolute",top:"15%",right:"20%",width:5,height:5,borderRadius:"50%",background:"rgba(255,255,255,0.85)",filter:"blur(1px)",animation:"livingOrb 2.5s ease-in-out infinite 0.5s",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",bottom:"18%",left:"18%",width:4,height:4,borderRadius:"50%",background:"rgba(196,181,253,0.8)",filter:"blur(1px)",animation:"livingOrb 3.5s ease-in-out infinite 1s",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",bottom:"30%",right:"15%",width:3,height:3,borderRadius:"50%",background:"rgba(167,139,250,0.9)",filter:"blur(0.5px)",animation:"orbCore 4s ease-in-out infinite 0.3s",pointerEvents:"none"}}/>
           </button>
         )}
         {aiOpen&&(
