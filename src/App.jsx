@@ -96,6 +96,15 @@ const RAW=[
   ["NQ","2026-05-14","13:59",-93.80,57,"SHORT"],["NQ","2026-05-14","14:01",236.20,1065,"LONG"],
   ["MNQ","2026-05-14","15:25",23.76,108,"SHORT"],["MNQ","2026-05-14","15:25",27.76,147,"SHORT"],
   ["MNQ","2026-05-14","15:25",41.26,171,"SHORT"],["MNQ","2026-05-14","15:25",51.52,177,"SHORT"],
+  ["MNQ","2026-05-15","15:06",-98.7,99,"SHORT"],
+  ["MNQ","2026-05-15","15:08",-88.7,301,"SHORT"],
+  ["NQ","2026-05-15","15:13",-13.8,78,"LONG"],
+  ["NQ","2026-05-15","15:14",386.2,104,"LONG"],
+  ["MNQ","2026-05-15","15:16",-81.2,10,"SHORT"],
+  ["MNQ","2026-05-15","15:17",-81.2,8,"SHORT"],
+  ["NQ","2026-05-15","15:17",-188.8,31,"LONG"],
+  ["NQ","2026-05-15","15:18",-133.8,31,"LONG"],
+  ["NQ","2026-05-15","15:19",841.2,78,"SHORT"],
 ];
 
 const SEED=mkT(RAW,"a");
@@ -123,7 +132,18 @@ const Chk=({checked,onClick,label})=>(
 );
 
 export default function App(){
-  const[trades,setTrades]=useState(()=>{try{const s=localStorage.getItem('ttp_trades');return s?JSON.parse(s):SEED;}catch(e){return SEED;}});
+  const[trades,setTrades]=useState(()=>{
+    try{
+      const v=localStorage.getItem('ttp_data_version');
+      if(v!=='2026-05-15-v2'){
+        localStorage.setItem('ttp_data_version','2026-05-15-v2');
+        localStorage.setItem('ttp_trades',JSON.stringify(SEED));
+        return SEED;
+      }
+      const s=localStorage.getItem('ttp_trades');
+      return s?JSON.parse(s):SEED;
+    }catch(e){return SEED;}
+  });
   const[showSplash,setShowSplash]=useState(true);
   const[tab,setTab]=useState("dash");
   const[toast,setToast]=useState("");
