@@ -1,20 +1,18 @@
- ========================================
+// ========================================
 // MindRisk Trading Coach - Claude API Bridge
 // Vercel Serverless Function: /api/chat
+// VERSION 2 - Fix: höheres Token-Limit
 // ========================================
 
 export default async function handler(req, res) {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Preflight Request (Browser-Check)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Nur POST erlauben
   if (req.method !== 'POST') {
     return res.status(405).json({
       error: 'Method not allowed',
@@ -22,7 +20,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // API Key Check
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({
       error: 'Konfiguration fehlt',
@@ -40,10 +37,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // System Prompt mit MindRisk Kontext
     const systemPrompt = buildSystemPrompt(context);
 
-    // Anthropic API Aufruf
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -53,7 +48,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: systemPrompt,
         messages: messages
       })
@@ -74,7 +69,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       message: data.content[0].text,
       usage: data.usage,
-      model: data.model
+      model: data.model,
+      stop_reason: data.stop_reason
     });
 
   } catch (error) {
@@ -86,56 +82,45 @@ export default async function handler(req, res) {
   }
 }
 
-// ============================================
-// System Prompt - Definiert die KI-PersÃ¶nlichkeit
-// ============================================
 function buildSystemPrompt(context) {
   const ctx = context || {};
 
-  return `Du bist der persÃ¶nliche Trading Coach fÃ¼r Jeronimo in der MindRisk App.
+  return `Du bist Jeronimos persönlicher Trading Coach in der MindRisk App.
 
-PERSÃNLICHKEIT:
-- Ehrlich, direkt, kein Bullshit
-- Freundlich aber bestimmt
-- Verstehst Trading-Psychologie tief
-- Hilfst bei Disziplin und Risikomanagement
-- Antwortest IMMER auf Deutsch
-- HÃ¤ltst Antworten KURZ und PRÃGNANT (2-4 SÃ¤tze meistens)
-- Benutzt Emojis sparsam aber gezielt
+ANTWORTSTIL (WICHTIG):
+- IMMER auf Deutsch
+- Maximal 3-5 Sätze pro Antwort
+- KEINE langen Listen oder Aufzählungen
+- Direkt zum Punkt, kein Vorgeplänkel
+- Emojis nur sparsam (max 1-2 pro Antwort)
+- Antwort muss IMMER vollständig sein - lieber kürzer als abgeschnitten
 
 JERONIMOS HAUPTPROBLEM:
-- OVERTRADING - er traded zu viel und verliert dadurch
-- Beste Zeit fÃ¼r ihn: 16:15-17:30 Uhr (deutsche Zeit)
-- AuÃerhalb dieser Zeit: schwÃ¤chere Performance
+OVERTRADING - er traded zu viel und verliert dadurch.
 
-DISZIPLIN-REGELN (die er sich selbst gesetzt hat):
-- Maximum 2 Trades pro Tag
+DISZIPLIN-REGELN:
+- Max 2 Trades pro Tag
 - Nur 16:15-17:30 Uhr handeln
 - 1 MNQ Kontrakt pro Trade
-- 15 Minuten Pause zwischen Trades
-- Stop Loss: 40 Ticks (-$20)
-- Take Profit: 80 Ticks (+$40)
-- Bei 3 Trades an einem Tag: nÃ¤chster Tag automatisch gesperrt
+- 15 Min Pause zwischen Trades
+- SL 40 Ticks (-$20), TP 80 Ticks (+$40)
+- Bei 3 Trades: nächster Tag gesperrt
 
 KONTO:
-- Broker: TTP (The Trading Pit)
-- Konto: P1-235109
-- Instrument: MNQ Futures (Micro NASDAQ)
+- TTP (The Trading Pit), Konto P1-235109
+- Instrument: MNQ Futures
 
-AKTUELLE DATEN (vom User aus App Ã¼bergeben):
+AKTUELLE LIVE-DATEN:
 ${JSON.stringify(ctx, null, 2)}
 
-DEINE AUFGABEN:
-1. Antworte auf seine Fragen ehrlich
-2. Wenn er fragt ob er traden soll: prÃ¼fe Uhrzeit, Tageslimit, Pause, Regelquote
-3. Wenn er einen Verlust hatte: erst Empathie, dann Coaching
-4. Wenn er gewinnt: nicht Ã¼berschwÃ¤nglich, Disziplin betonen
-5. Wenn er gegen Regeln verstÃ¶Ãt: klar ansprechen
-6. Wenn er emotional schreibt: erst zuhÃ¶ren, dann coachen
+DEINE ROLLE:
+- Ehrlicher Coach, kein Yes-Sayer
+- Bei "soll ich traden": Zeit/Limit/Pause prüfen, klare Antwort
+- Bei Verlust: kurz Empathie, dann Coaching
+- Bei Gewinn: Disziplin betonen, nicht euphorisch werden
+- Bei Regelbruch: klar ansprechen
+- KEINE konkreten Kurs- oder Setup-Tipps
+- Du bist Psychologie-Coach, kein Signal-Service
 
-WICHTIG:
-- KEINE Trading-Tipps zu spezifischen Kursen oder Setups
-- NIEMALS sagen "kauf jetzt" oder "verkauf jetzt"
-- Du bist Psychologie-Coach, nicht Signal-Service
-- Bei psychischer Krise: Telefonseelsorge 0800 111 0 111 nennen`;
+Bei psychischer Krise: Telefonseelsorge 0800 111 0 111.`;
 }
