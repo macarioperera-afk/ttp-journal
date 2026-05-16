@@ -532,7 +532,7 @@ export default function App(){
     }));
   },[t09]);
 
-  const NAVS=[{k:"dash",icon:"📊",lb:"Dashboard"},{k:"check",icon:"✅",lb:"Regeln"},{k:"log",icon:"➕",lb:"Eintragen"},{k:"analyse",icon:"📈",lb:"Analyse"},{k:"hist",icon:"📋",lb:"History"}];
+  const NAVS=[{k:"dash",icon:"📊",lb:"Dashboard"},{k:"check",icon:"✅",lb:"Regeln"},{k:"log",icon:"📝",lb:"Loggen"},{k:"analyse",icon:"📈",lb:"Analyse"},{k:"hist",icon:"📋",lb:"History"}];
 
   return(
     <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:14,paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))"}}>
@@ -543,7 +543,7 @@ export default function App(){
         <div style={{fontSize:11,color:"#6b7280",letterSpacing:"3px",marginBottom:32,animation:"fadeIn 0.8s ease 0.3s both"}}>TRADING JOURNAL</div>
         <div style={{width:48,height:48,borderRadius:"50%",border:"3px solid #2d3548",borderTopColor:B,animation:"spin 0.8s linear infinite"}}/>
       </div>}
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes fadeOut{to{opacity:0;visibility:hidden}}@keyframes scaleIn{from{transform:scale(0.85);opacity:0}to{transform:scale(1);opacity:1}}@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)}50%{box-shadow:0 0 0 12px rgba(245,158,11,0)}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}html,body{overflow-x:hidden;max-width:100%}input,select,textarea{max-width:100%;box-sizing:border-box}@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes fadeOut{to{opacity:0;visibility:hidden}}@keyframes scaleIn{from{transform:scale(0.85);opacity:0}to{transform:scale(1);opacity:1}}@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.5)}50%{box-shadow:0 0 0 12px rgba(245,158,11,0)}}input,select,textarea{background:#1a1f2e;color:#e2e8f0;border:1px solid #2d3548;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;outline:none;width:100%;max-width:100%}input:focus,select:focus,textarea:focus{border-color:#6366f1}select option{background:#1a1f2e}button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}`}</style>
 
       {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#161b22",border:"1px solid "+G,color:G,padding:"10px 20px",borderRadius:10,fontWeight:600,fontSize:13,boxShadow:"0 8px 32px #0008",whiteSpace:"nowrap"}}>{toast}</div>}
       {delId&&<div style={{position:"fixed",inset:0,zIndex:998,background:"#000c",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -642,7 +642,7 @@ export default function App(){
               <div style={{marginBottom:8}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                   <span style={{color:"#6b7280",fontSize:10}}>Max DD Abstand</span>
-                  <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${kontoabstand.toFixed(0)} frei ({Math.round((1-ttpDD/BUFFER)*100)}%)</span>
+                  <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${kontoabstand.toFixed(0)} frei ({Math.round(kontoabstand/BUFFER*100)}%)</span>
                 </div>
                 <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
                 {kontoabstand<1000&&<div style={{color:kontoabstand<500?R:Y,fontSize:10,fontWeight:700,marginTop:3}}>{kontoabstand<500?"STOPP! Nur noch $"+kontoabstand.toFixed(0)+" bis TTP sperrt":"Vorsicht: unter $1.000"}</div>}
@@ -824,9 +824,34 @@ export default function App(){
               <div style={{color:now.getHours()>=16?G:Y,fontSize:24,fontWeight:800}}>{now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr</div>
               <div style={{color:"#6b7280",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Noch nicht – warte auf 16:15 Uhr"}</div>
             </Card>
-            {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card>
-              <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>Pre-Trade Regelnliste</div>
-              {[{id:"c1",q:"Geplantes Setup – kein Impuls?"},{id:"c2",q:"SL und TP definiert?"},{id:"c3",q:"Emotional ruhig und klar?"},{id:"c4",q:"Nach 16:15 Uhr?"}].map(it=>(
+            {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<><Card style={{background:"linear-gradient(135deg,rgba(99,102,241,0.06) 0%,rgba(0,211,149,0.04) 100%)",borderColor:B+"33"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontWeight:700,fontSize:13,letterSpacing:"-0.2px",color:B}}>📋 Deine eingestellten Regeln</div>
+                <button onClick={()=>setSettingsOpen(true)} style={{background:"#2d3548",color:"#e2e8f0",fontSize:10,padding:"4px 10px",borderRadius:8,fontWeight:600}}>⚙️ Anpassen</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,fontSize:11}}>
+                <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{color:"#6b7280",fontSize:9,marginBottom:2,letterSpacing:"0.5px"}}>MAX TRADES</div>
+                  <div style={{fontWeight:800,fontSize:14}}>{settings.maxTrades}/Tag</div>
+                </div>
+                <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{color:"#6b7280",fontSize:9,marginBottom:2,letterSpacing:"0.5px"}}>PFLICHTPAUSE</div>
+                  <div style={{fontWeight:800,fontSize:14}}>{settings.pauseMins} Min</div>
+                </div>
+                <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{color:"#6b7280",fontSize:9,marginBottom:2,letterSpacing:"0.5px"}}>FENSTER</div>
+                  <div style={{fontWeight:800,fontSize:14}}>{settings.windowStart}–{settings.windowEnd}</div>
+                </div>
+                <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{color:"#6b7280",fontSize:9,marginBottom:2,letterSpacing:"0.5px"}}>RISIKO/TRADE</div>
+                  <div style={{fontWeight:800,fontSize:14}}>{settings.riskPerTradePct}%</div>
+                </div>
+              </div>
+            </Card>
+            <Card>
+              <div style={{fontWeight:700,fontSize:15,marginBottom:4,letterSpacing:"-0.2px"}}>✅ Pre-Trade Checkliste</div>
+              <div style={{color:"#6b7280",fontSize:11,marginBottom:12}}>Alle 4 Punkte abhaken, dann kannst du loggen</div>
+              {[{id:"c1",q:"Geplantes Setup – kein Impuls?"},{id:"c2",q:"SL und TP definiert?"},{id:"c3",q:"Emotional ruhig und klar?"},{id:"c4",q:"Nach "+settings.windowStart+" Uhr?"}].map(it=>(
                 <Chk key={it.id} checked={checks[it.id]} onClick={()=>{const newChecks={...checks,[it.id]:!checks[it.id]};setChecks(newChecks);localStorage.setItem("ttp_checks",JSON.stringify({date:todayISO(),data:newChecks}));}} label={it.q}/>
               ))}
               <div style={{marginTop:12,background:allChecked?G+"22":R+"11",border:"1px solid "+(allChecked?G:R)+"44",borderRadius:10,padding:12,textAlign:"center"}}>
@@ -834,7 +859,7 @@ export default function App(){
                 :<div style={{color:R,fontWeight:700,fontSize:15}}>Noch nicht bereit</div>}
               </div>
               <button onClick={()=>{setChecks({c1:false,c2:false,c3:false,c4:false});localStorage.removeItem("ttp_checks");}} style={{background:"none",color:"#6b7280",fontSize:12,padding:"7px 0",width:"100%",marginTop:6}}>Zuruecksetzen</button>
-            </Card>}
+            </Card></>}
             <Card style={{background:"#12101a",borderColor:P+"33"}}>
               <div style={{color:P,fontWeight:700,marginBottom:8}}>Meine Regeln</div>
               {["1 MNQ – kein NQ bis profitabel","Max 2 Trades/Tag","15 Min Pause nach jedem Trade","Nur 16:15–17:30 Uhr","SL + TP vor dem Entry","Ein 3. Trade sperrt morgen"].map((r,i)=>(
@@ -883,11 +908,11 @@ export default function App(){
               </div>
             )}
             <Card>
-              <div style={{fontWeight:700,fontSize:16,marginBottom:14}}>Trade eintragen</div>
+              <div style={{fontWeight:700,fontSize:16,marginBottom:14}}>Trade loggen</div>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,overflow:"hidden"}}>
-                  <div style={{minWidth:0}}><label style={{color:"#6b7280",fontSize:10,display:"block",marginBottom:4}}>DATUM</label><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></div>
-                  <div style={{minWidth:0}}><label style={{color:"#6b7280",fontSize:10,display:"block",marginBottom:4}}>UHRZEIT</label><input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/></div>
+                  <div style={{minWidth:0}}><label style={{color:"#6b7280",fontSize:10,display:"block",marginBottom:4}}>DATUM</label><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:12,padding:"7px 6px",boxSizing:"border-box",minWidth:0}}/></div>
+                  <div style={{minWidth:0}}><label style={{color:"#6b7280",fontSize:10,display:"block",marginBottom:4}}>UHRZEIT</label><input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={{width:"100%",fontSize:12,padding:"7px 6px",boxSizing:"border-box",minWidth:0}}/></div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,overflow:"hidden"}}>
                   <div style={{minWidth:0}}><label style={{color:"#6b7280",fontSize:10,display:"block",marginBottom:4}}>KONTRAKT</label>
@@ -1118,7 +1143,7 @@ export default function App(){
 
       {/* SETTINGS DRAWER */}
       {settingsOpen&&<div onClick={()=>setSettingsOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",animation:"fadeIn 0.2s ease"}}>
-        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:0,right:0,bottom:0,width:"min(360px,90vw)",background:"linear-gradient(180deg,#1a1f2e 0%,#0f1117 100%)",borderLeft:"1px solid #2d3548",overflowY:"auto",animation:"slideUp 0.3s ease",padding:"20px 18px",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"}}>
+        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:0,right:0,bottom:0,width:"min(300px,82vw)",background:"linear-gradient(180deg,#1a1f2e 0%,#0f1117 100%)",borderLeft:"1px solid #2d3548",overflowY:"auto",animation:"slideUp 0.3s ease",padding:"20px 18px",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <div style={{fontWeight:800,fontSize:20,letterSpacing:"-0.5px"}}>⚙️ Einstellungen</div>
             <button onClick={()=>setSettingsOpen(false)} style={{background:"#2d3548",borderRadius:8,width:32,height:32,padding:0,color:"#e2e8f0",fontSize:18}}>×</button>
