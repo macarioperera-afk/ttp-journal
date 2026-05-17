@@ -181,6 +181,7 @@ export default function App(){
     }catch(e){return{maxTrades:2,pauseMins:15,windowStart:"16:15",windowEnd:"17:30",monthlyGoal:1500,riskPerTradePct:2};}
   });
   const saveSettings=(s)=>{setSettings(s);localStorage.setItem('ttp_settings',JSON.stringify(s));};
+  const[profExpanded,setProfExpanded]=useState(false);
   const[journal,setJournal]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_journal')||'{}');}catch(e){return{};}});
   const[todayJ,setTodayJ]=useState(()=>{
     try{const j=JSON.parse(localStorage.getItem('ttp_journal')||'{}');return j[todayISO()]||{good:"",bad:"",emotion:""};}
@@ -490,7 +491,7 @@ export default function App(){
         button{cursor:pointer;font-family:inherit;border:none;border-radius:8px}
         .mr-content{padding:16px 16px 20px;max-width:520px;margin:0 auto}
         .mr-nav{max-width:520px;margin:0 auto}
-        @keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes livingOrb{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.55),0 0 40px rgba(168,85,247,0.35),0 0 70px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.85),0 0 65px rgba(168,85,247,0.55),0 0 100px rgba(99,102,241,0.3)}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.55;transform:translate(-50%,-50%) scale(0.85)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}}@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.5),0 0 40px rgba(168,85,247,0.3),0 0 60px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.8),0 0 60px rgba(168,85,247,0.5),0 0 90px rgba(99,102,241,0.25)}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.6;transform:translate(-50%,-50%) scale(0.8)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}}
+        @keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes livingOrb{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.55),0 0 40px rgba(168,85,247,0.35),0 0 70px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.85),0 0 65px rgba(168,85,247,0.55),0 0 100px rgba(99,102,241,0.3)}}@keyframes orbRing1{0%{transform:scale(1);opacity:0.7}100%{transform:scale(2.2);opacity:0}}@keyframes orbRing2{0%{transform:scale(1);opacity:0.5}100%{transform:scale(2.8);opacity:0}}@keyframes orbRing3{0%{transform:scale(1);opacity:0.3}100%{transform:scale(3.5);opacity:0}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.55;transform:translate(-50%,-50%) scale(0.85)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}}@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.5),0 0 40px rgba(168,85,247,0.3),0 0 60px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.8),0 0 60px rgba(168,85,247,0.5),0 0 90px rgba(99,102,241,0.25)}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.6;transform:translate(-50%,-50%) scale(0.8)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes fadeOut{to{opacity:0;visibility:hidden}}
@@ -516,7 +517,7 @@ export default function App(){
       <div style={{background:"linear-gradient(180deg,#1a1f2e 0%,#161b27 100%)",borderBottom:"1px solid #2d3548",padding:"14px 18px 12px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <div>
-            <div style={{fontWeight:800,fontSize:22,letterSpacing:"-0.5px"}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
+            <div style={{fontWeight:800,fontSize:28,letterSpacing:"-1px"}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
             <div style={{color:"#6b7280",fontSize:10,marginTop:1}}>Jeronimo – Konto 09</div>
           </div>
           <div style={{fontSize:10,textAlign:"right"}}>
@@ -627,9 +628,12 @@ export default function App(){
             </div>
           </Card>
 
-          {profitPlan&&<Card style={{borderColor:G+"33",background:"#0a160f"}}>
-            <div style={{fontWeight:700,fontSize:15,marginBottom:3,color:G}}>Weg zur Profitabilitaet</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
+          {profitPlan&&<Card style={{borderColor:G+"33",background:"#0a160f",cursor:"pointer"}} onClick={()=>setProfExpanded(p=>!p)}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <div style={{fontWeight:700,fontSize:15,color:G}}>Weg zur Profitabilität</div>
+              <div style={{color:G,fontSize:12,opacity:0.8,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:profExpanded?10:0}}>
               {[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},{l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:R},{l:"BREAK-EVEN",v:profitPlan.neededWR+"%",c:Y}].map(s=>(
                 <div key={s.l} style={{background:"#0f1117",borderRadius:8,padding:10,textAlign:"center"}}>
                   <div style={{color:"#6b7280",fontSize:9,marginBottom:3}}>{s.l}</div>
@@ -637,9 +641,29 @@ export default function App(){
                 </div>
               ))}
             </div>
-            {profitPlan.overtradeDays>0&&<div style={{background:R+"22",border:"1px solid "+R+"44",borderRadius:8,padding:"8px 12px",display:"flex",gap:8}}>
-              <span>⚠️</span><div style={{color:R,fontSize:12,fontWeight:600}}>{profitPlan.overtradeDays} von {profitPlan.totalDays} Tagen: Overtrading. Dein #1 Problem.</div>
-            </div>}
+            {profExpanded&&<>
+              {profitPlan.overtradeDays>0&&<div style={{background:R+"22",border:"1px solid "+R+"44",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10}}>
+                <span>⚠️</span><div style={{color:R,fontSize:12,fontWeight:600}}>{profitPlan.overtradeDays} von {profitPlan.totalDays} Tagen: Overtrading. Dein #1 Problem.</div>
+              </div>}
+              <div style={{background:"#0f1117",borderRadius:10,padding:12}}>
+                <div style={{color:G,fontWeight:700,marginBottom:8}}>1 MNQ – Live Kalkulation:</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[
+                    {l:"RISIKO/TRADE",v:"$"+Math.round(kontoabstand*0.02),c:R},
+                    {l:"ZIEL/TRADE (2:1)",v:"$"+Math.round(kontoabstand*0.04),c:G},
+                    {l:"EV PRO TAG",v:(profitPlan.dailyEV>=0?"+":"")+"$"+profitPlan.dailyEV,c:profitPlan.dailyEV>=0?G:R},
+                    {l:"PROGNOSE/MONAT",v:(profitPlan.dailyEV*22>=0?"+":"")+"$"+Math.round(profitPlan.dailyEV*22),c:profitPlan.dailyEV>=0?G:R},
+                    {l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:Y},
+                    {l:"DD ABSTAND",v:"$"+kontoabstand.toFixed(0),c:kontoabstand>1000?G:R}
+                  ].map(s=>(
+                    <div key={s.l} style={{background:"#1a1f2e",borderRadius:8,padding:8}}>
+                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>{s.l}</div>
+                      <div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>}
           </Card>}
         </div>}
 
@@ -876,13 +900,13 @@ export default function App(){
       {/* BOTTOM NAV */}
       <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(26,31,46,0.95)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
-          <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:"#4b5563",padding:"10px 2px 11px",fontSize:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
+          <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:P+"aa",padding:"10px 2px 11px",fontSize:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
             <div style={{width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",opacity:tab===nav.k?1:0.55,transform:tab===nav.k?"scale(1.1)":"scale(1)",transition:"all 0.2s"}}>
               {nav.k==="log"&&!allChecked&&!todayBlocked&&!atLimit&&!inPause
                 ?<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#ef4444" strokeWidth="1.8"/><line x1="12" y1="8" x2="12" y2="16" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="#ef4444" strokeWidth="2" strokeLinecap="round"/></svg>
                 :nav.svg}
             </div>
-            <span style={{whiteSpace:"nowrap",color:tab===nav.k?B:"#4b5563"}}>{nav.lb.toUpperCase()}</span>
+            <span style={{whiteSpace:"nowrap",color:tab===nav.k?B:P+"aa"}}>{nav.lb.toUpperCase()}</span>
             {nav.k==="log"&&inPause&&<div style={{position:"absolute",top:8,right:"14%",width:6,height:6,borderRadius:"50%",background:Y,boxShadow:"0 0 6px "+Y}}/>}
             {nav.k==="check"&&allChecked&&!todayBlocked&&<div style={{position:"absolute",top:8,right:"14%",width:6,height:6,borderRadius:"50%",background:G,boxShadow:"0 0 8px rgba(0,211,149,0.8)"}}/>}
           </button>
@@ -919,19 +943,17 @@ export default function App(){
       <div style={{position:"fixed",bottom:88,right:16,zIndex:200}}>
         {!aiOpen&&(
           <button onClick={()=>{setAiOpen(true);if(aiMessages.length===0){setAiMessages([{role:"assistant",content:smartCoach("","daily_motivation")}]);}}}
-            style={{width:64,height:64,borderRadius:"50%",border:"none",padding:0,position:"relative",overflow:"visible",cursor:"pointer",background:"transparent",WebkitTapHighlightColor:"transparent"}}>
-            {/* Outer glow rings */}
-            <div style={{position:"absolute",inset:-16,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.18) 0%,rgba(168,85,247,0.08) 50%,transparent 70%)",animation:"livingOrb 3s ease-in-out infinite",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",inset:-8,borderRadius:"50%",border:"1px solid rgba(196,181,253,0.25)",borderTopColor:"rgba(196,181,253,0.7)",borderRightColor:"rgba(168,85,247,0.5)",animation:"orbSpin 6s linear infinite",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",inset:-4,borderRadius:"50%",border:"1px solid rgba(99,102,241,0.2)",borderBottomColor:"rgba(99,102,241,0.6)",borderLeftColor:"rgba(168,85,247,0.3)",animation:"orbSpin 10s linear infinite reverse",pointerEvents:"none"}}/>
-            {/* Main sphere */}
-            <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"radial-gradient(circle at 35% 30%,#ddd6fe 0%,#a78bfa 20%,#7c3aed 45%,#4c1d95 70%,#1e1b4b 100%)",animation:"livingOrb 3s ease-in-out infinite,orbGlow 2.5s ease-in-out infinite",boxShadow:"inset 0 0 20px rgba(196,181,253,0.3)"}}/>
-            {/* Inner shimmer */}
-            <div style={{position:"absolute",top:"18%",left:"22%",width:22,height:22,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.9) 0%,rgba(221,214,254,0.5) 40%,transparent 70%)",filter:"blur(4px)",animation:"orbCore 2s ease-in-out infinite",pointerEvents:"none"}}/>
-            {/* Neural dots */}
-            <div style={{position:"absolute",top:"15%",right:"20%",width:5,height:5,borderRadius:"50%",background:"rgba(255,255,255,0.85)",filter:"blur(1px)",animation:"livingOrb 2.5s ease-in-out infinite 0.5s",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",bottom:"18%",left:"18%",width:4,height:4,borderRadius:"50%",background:"rgba(196,181,253,0.8)",filter:"blur(1px)",animation:"livingOrb 3.5s ease-in-out infinite 1s",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",bottom:"30%",right:"15%",width:3,height:3,borderRadius:"50%",background:"rgba(167,139,250,0.9)",filter:"blur(0.5px)",animation:"orbCore 4s ease-in-out infinite 0.3s",pointerEvents:"none"}}/>
+            style={{width:60,height:60,borderRadius:"50%",border:"none",padding:0,position:"relative",overflow:"visible",cursor:"pointer",background:"transparent",WebkitTapHighlightColor:"transparent"}}>
+            {/* Pulsing rings – echter Herzschlag */}
+            <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"rgba(99,102,241,0.4)",animation:"orbRing1 2s ease-out infinite",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"rgba(168,85,247,0.3)",animation:"orbRing2 2s ease-out infinite 0.6s",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"rgba(99,102,241,0.2)",animation:"orbRing3 2s ease-out infinite 1.2s",pointerEvents:"none"}}/>
+            {/* Main sphere – atmet */}
+            <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"radial-gradient(circle at 35% 28%,#e0d4ff 0%,#c4b5fd 15%,#a78bfa 35%,#7c3aed 60%,#4c1d95 85%,#1e1b4b 100%)",animation:"livingOrb 3.5s ease-in-out infinite",boxShadow:"0 0 25px rgba(99,102,241,0.7),0 0 50px rgba(168,85,247,0.4),inset 0 0 15px rgba(255,255,255,0.15)"}}/>
+            {/* Rotierender Ring */}
+            <div style={{position:"absolute",inset:3,borderRadius:"50%",border:"1.5px solid transparent",borderTopColor:"rgba(255,255,255,0.6)",borderRightColor:"rgba(196,181,253,0.4)",animation:"orbSpin 4s linear infinite",pointerEvents:"none"}}/>
+            {/* Kern-Licht */}
+            <div style={{position:"absolute",top:"20%",left:"22%",width:20,height:20,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(221,214,254,0.6) 50%,transparent 75%)",filter:"blur(3px)",animation:"orbCore 2s ease-in-out infinite",pointerEvents:"none"}}/>
           </button>
         )}
         {aiOpen&&(
