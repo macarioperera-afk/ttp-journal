@@ -541,7 +541,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       setAiInput(prev=>{
         if(prev&&prev.trim()){
           setTimeout(()=>{
-                        const btn=document.getElementById("aiSendBtn");
+            const btn=document.getElementById("aiSendBtn");
             if(btn)btn.click();
           },300);
         }
@@ -549,7 +549,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       });
     };
     rec.onerror=(e)=>{
-      setIsRecording(false);
+          setIsRecording(false);
       if(e.error==="not-allowed")showToast("Mikrofon-Zugriff verweigert – Einstellungen prüfen");
       else if(e.error==="no-speech")showToast("Nichts gehört – nochmal versuchen");
       else showToast("Sprachfehler: "+e.error);
@@ -769,15 +769,37 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         <div style={{maxWidth:isDesktop?"860px":"100%",margin:"0 auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{flex:1}}>
-            <div style={{fontWeight:900,fontSize:26,letterSpacing:"-1px",lineHeight:1}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
-            <div style={{color:"#e2e8f0",fontSize:13,fontWeight:700,marginTop:2}}>Jeronimo <span style={{color:"#4b5563",fontSize:10,fontWeight:400}}>· Konto 09 · P1-235109</span></div>
+            <div style={{fontWeight:900,fontSize:30,letterSpacing:"-1.5px",lineHeight:1}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
+            <div style={{color:"#e2e8f0",fontSize:12,fontWeight:700,marginTop:3}}>Jeronimo <span style={{color:"#4b5563",fontSize:10,fontWeight:400}}>· Konto 09 · P1-235109</span></div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{fontSize:9,textAlign:"right"}}>
-              <div style={{display:"flex",gap:8}}>
-                <div><span style={{color:"#4b5563"}}>LON </span><span style={{color:lonOpen?G:Y,fontWeight:700}}>{lonTime}</span><span style={{color:lonOpen?G:"#374151",marginLeft:2,fontSize:8}}>{lonOpen?"●":"○"}</span></div>
-                <div><span style={{color:"#4b5563"}}>CHI </span><span style={{color:chiOpen?G:Y,fontWeight:700}}>{chiTime}</span><span style={{color:chiOpen?G:"#374151",marginLeft:2,fontSize:8}}>{chiOpen?"●":"○"}</span></div>
-              </div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{fontSize:10}}>
+              {(()=>{
+                const tokyoH=new Date(nowD.toLocaleString("en-US",{timeZone:"Asia/Tokyo"})).getHours();
+                const tokyoTime=nowD.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tokyo"});
+                const tokyoOpen=tokyoH>=9&&tokyoH<15;
+                const myH=new Date().getHours();const myM=new Date().getMinutes();
+                const myWindow=(myH===16&&myM>=15)||(myH===17&&myM<=30);
+                return(
+                  <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{color:"#4b5563",fontSize:8}}>LON</span>
+                      <span style={{color:lonOpen?G:"#4b5563",fontWeight:700,fontSize:10}}>{lonTime}</span>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:lonOpen?G:"#374151",boxShadow:lonOpen?"0 0 4px "+G:"none"}}/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{color:"#4b5563",fontSize:8}}>CHI</span>
+                      <span style={{color:myWindow?G:chiOpen?Y:"#4b5563",fontWeight:700,fontSize:10}}>{chiTime}</span>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:myWindow?G:chiOpen?Y:"#374151",boxShadow:myWindow?"0 0 4px "+G:chiOpen?"0 0 4px "+Y:"none"}}/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{color:"#4b5563",fontSize:8}}>TYO</span>
+                      <span style={{color:tokyoOpen?G:"#4b5563",fontWeight:700,fontSize:10}}>{tokyoTime}</span>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:tokyoOpen?G:"#374151",boxShadow:tokyoOpen?"0 0 4px "+G:"none"}}/>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <button onClick={()=>setSettingsOpen(true)} style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",borderRadius:12,width:40,height:40,padding:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:18,flexShrink:0}}>☰</button>
           </div>
@@ -835,25 +857,27 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 <div style={{color:"#6b7280",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div>
               </div>
             </div>
-            <div style={{marginBottom:8}}>
+            <div style={{marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                 <span style={{color:"#6b7280",fontSize:10}}>Max DD Abstand</span>
                 <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${Math.round(kontoabstand).toLocaleString()} ({Math.round(kontoabstand/BUFFER*100)}%)</span>
               </div>
               <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
             </div>
-            <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center"}}>
-                <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>DISZIPLIN</div>
-                <div style={{color:sc(disc),fontWeight:800,fontSize:14}}>{disc}%</div>
-                <div style={{color:"#374151",fontSize:8}}>{disc>=80?"✅ Top":disc>=60?"👍 Gut":"⚡ Ausbau"}</div>
+            <div style={{marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                <span style={{color:"#6b7280",fontSize:10}}>Disziplin</span>
+                <span style={{color:sc(disc),fontWeight:700}}>{disc}% / {goals.disc}% Ziel</span>
               </div>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center"}}>
+              <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
+            </div>
+            <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
+              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
                 <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>MONAT P&L</div>
                 <div style={{color:pc(monthPnl),fontWeight:800,fontSize:14}}>{fs(monthPnl)}</div>
                 <div style={{color:"#374151",fontSize:8}}>diesen Monat</div>
               </div>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center"}}>
+              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
                 <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>WIN RATE</div>
                 <div style={{color:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R,fontWeight:800,fontSize:14}}>{t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0}%</div>
                 <div style={{color:"#374151",fontSize:8}}>{t09.length} Trades</div>
@@ -1076,7 +1100,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>Zeitfenster</div>
             <div style={{color:now.getHours()>=16?G:Y,fontSize:24,fontWeight:800}}>{now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr</div>
             <div style={{color:"#6b7280",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Warte auf 16:15 Uhr"}</div>
-          </Card>
+                      </Card>
           {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card>
             <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>✅ Pre-Trade Checkliste</div>
             <div style={{color:"#6b7280",fontSize:11,marginBottom:12}}>Alle 4 Punkte abhaken vor dem Trade</div>
@@ -1084,7 +1108,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               <Chk key={it.id} checked={checks[it.id]} onClick={()=>{const n={...checks,[it.id]:!checks[it.id]};setChecks(n);localStorage.setItem("ttp_checks",JSON.stringify({date:todayISO(),data:n}));}} label={it.q}/>
             ))}
             <div style={{marginTop:12,background:allChecked?G+"22":R+"11",border:"1px solid "+(allChecked?G:R)+"44",borderRadius:10,padding:12,textAlign:"center"}}>
-                            {allChecked?<div style={{color:G,fontWeight:800,fontSize:17}}>GRUENES LICHT ✅</div>:<div style={{color:R,fontWeight:700,fontSize:15}}>Noch nicht bereit</div>}
+              {allChecked?<div style={{color:G,fontWeight:800,fontSize:17}}>GRUENES LICHT ✅</div>:<div style={{color:R,fontWeight:700,fontSize:15}}>Noch nicht bereit</div>}
             </div>
           </Card>}
           <Card style={{background:"#12101a",borderColor:P+"33"}}>
