@@ -159,7 +159,11 @@ export default function App(){
   const[aiOpen,setAiOpen]=useState(false);
   const[aiMessages,setAiMessages]=useState([]);
   const[aiInput,setAiInput]=useState("");
+  const[pendingImage,setPendingImage]=useState(null);
   const[aiLoading,setAiLoading]=useState(false);
+  const[aiImage,setAiImage]=useState(null);
+  const[aiImagePreview,setAiImagePreview]=useState(null);
+  const[isRecording,setIsRecording]=useState(false);
   const[aiAutoShown,setAiAutoShown]=useState({});
   const[checks,setChecks]=useState(()=>{
     try{
@@ -182,6 +186,18 @@ export default function App(){
   });
   const saveSettings=(s)=>{setSettings(s);localStorage.setItem('ttp_settings',JSON.stringify(s));};
   const[profExpanded,setProfExpanded]=useState(false);
+  const[coachProfile,setCoachProfile]=useState(()=>{
+    try{return localStorage.getItem('ttp_coach_profile')||'';}catch(e){return'';}
+  });
+  const[coachMemory,setCoachMemory]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem('ttp_coach_memory')||'[]');}catch(e){return[];}
+  });
+  const saveCoachMemory=(note)=>{
+    const ts=new Date().toISOString().split('T')[0];
+    const newMemory=[{date:ts,note},...coachMemory].slice(0,30);
+    setCoachMemory(newMemory);
+    localStorage.setItem('ttp_coach_memory',JSON.stringify(newMemory));
+  };
   const[journal,setJournal]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_journal')||'{}');}catch(e){return{};}});
   const[todayJ,setTodayJ]=useState(()=>{
     try{const j=JSON.parse(localStorage.getItem('ttp_journal')||'{}');return j[todayISO()]||{good:"",bad:"",emotion:""};}
@@ -284,7 +300,11 @@ export default function App(){
     const avgL=losses.length?Math.abs(losses.reduce((s,t)=>s+t.pnl,0)/losses.length):1;
     const rr=avgW/avgL;
     const m={};t09.forEach(t=>{m[t.date]=(m[t.date]||0)+1;});
-    return{wr:Math.round(wr*100),rr:rr.toFixed(1),neededWR:Math.round(100/(1+rr)),overtradeDays:Object.values(m).filter(n=>n>3).length,totalDays:Object.keys(m).length};
+    const dailyEV=Math.round(2*(wr*avgW-(1-wr)*avgL));
+    const monthlyEV=Math.round(dailyEV*22);
+    return{wr:Math.round(wr*100),rr:rr.toFixed(1),neededWR:Math.round(100/(1+rr)),
+      dailyEV,monthlyEV,avgW:Math.round(avgW),avgL:Math.round(avgL),
+      overtradeDays:Object.values(m).filter(n=>n>3).length,totalDays:Object.keys(m).length};
   },[t09]);
 
   const durBuckets=useMemo(()=>{
@@ -458,8 +478,16 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
     }
 
     try{
+      const wins_t=t09.filter(t=>t.pnl>0),losses_t=t09.filter(t=>t.pnl<0);
       const ctx={saldo,kontoabstand,tradeCount,todPnl,disc,todayBlocked,inPause,tradesLeft,
-        totalTrades:t09.length,winRate:wr,currentDay:tod,dayWR,monthPnl,targetBalance:goals.targetBalance};
+        totalTrades:t09.length,winRate:wr,currentDay:tod,dayWR,monthPnl,targetBalance:goals.targetBalance,
+        missingToTarget:Math.max(0,goals.targetBalance-saldo),
+        avgWin:wins_t.length?Math.round(wins_t.reduce((s,t)=>s+t.pnl,0)/wins_t.length):0,
+        avgLoss:losses_t.length?Math.round(losses_t.reduce((s,t)=>s+t.pnl,0)/losses_t.length):0,
+        allTrades:t09.map(t=>`${t.date} ${t.time} ${t.contract} ${t.dir} ${t.pnl>=0?"+":""}${t.pnl.toFixed(0)}`).join("\n"),
+        todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time})),
+        coachProfile:coachProfile||'',
+        coachMemory:coachMemory.slice(0,10).map(m=>m.date+': '+m.note).join('\n')};
       const res=await fetch('/api/chat',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({messages:[{role:"user",content:prompt}],context:ctx})
@@ -467,39 +495,117 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       const rawText=await res.text();
       if(!res.ok){setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);return;}
       const data=JSON.parse(rawText);
-      if(data.message)setAiMessages([{role:"assistant",content:data.message,auto:true}]);
+      if(data.message){
+        setAiMessages([{role:"assistant",content:data.message,auto:true}]);
+        const m=data.message;
+        if(m.includes("Muster")||m.includes("Problem")||m.includes("Stärke")||m.includes("Schwäche")||m.length>200){
+          saveCoachMemory("💡 Session "+new Date().toLocaleDateString("de-DE")+": "+m.slice(0,100).replace(/\n/g," ")+"...");
+        }
+      }
       else setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);
     }catch(err){
       setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);
     }finally{setAiLoading(false);}
   };
 
+  const startVoice=()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){showToast("Spracheingabe nicht unterstützt");return;}
+    const rec=new SR();
+    rec.lang="de-DE";
+    rec.continuous=false;
+    rec.interimResults=false;
+    setIsRecording(true);
+    rec.start();
+    rec.onresult=(e)=>{
+      const text=e.results[0][0].transcript;
+      setAiInput(text);
+      setIsRecording(false);
+    };
+    rec.onerror=()=>setIsRecording(false);
+    rec.onend=()=>setIsRecording(false);
+  };
+
+  const handleImageSelect=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      const base64=ev.target.result.split(",")[1];
+      setAiImage({base64,mediaType:file.type||"image/jpeg"});
+      setAiImagePreview(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const sendAiMessage=async()=>{
-    if(!aiInput.trim()||aiLoading)return;
+    if((!aiInput.trim()&&!aiImage)||aiLoading)return;
+    // "Merke dir..." Befehl → direkt ins Gedächtnis
+    const inputLow=(aiInput||"").toLowerCase();
+    if(inputLow.startsWith("merke dir")||inputLow.startsWith("vergiss nicht")){
+      const note=aiInput.slice(inputLow.indexOf(" ")+1).trim();
+      if(note){
+        saveCoachMemory("📌 "+note);
+        setAiMessages(p=>[...p,{role:"user",content:aiInput},{role:"assistant",content:"✅ Gemerkt! Ich werde mir das für alle zukünftigen Sessions merken:\n\n📌 "+note}]);
+        setAiInput("");
+        return;
+      }
+    }
     const userInput=aiInput;
     const newMsgs=[...aiMessages,{role:"user",content:userInput}];
     setAiMessages(newMsgs);
     setAiInput("");
     setAiLoading(true);
     try{
+      // Alle Trades für KI-Analyse
+      const allWins=t09.filter(t=>t.pnl>0);
+      const allLoss=t09.filter(t=>t.pnl<0);
+      const DAYS2=["So","Mo","Di","Mi","Do","Fr","Sa"];
+      const dayStats={};
+      t09.forEach(t=>{const d=DAYS2[new Date(t.date).getDay()];if(!dayStats[d])dayStats[d]={n:0,wins:0,pnl:0};dayStats[d].n++;dayStats[d].pnl+=t.pnl;if(t.pnl>0)dayStats[d].wins++;});
+      const hourStats={};
+      t09.forEach(t=>{const h=parseInt(t.time.split(":")[0]);if(!hourStats[h])hourStats[h]={n:0,wins:0,pnl:0};hourStats[h].n++;hourStats[h].pnl+=t.pnl;if(t.pnl>0)hourStats[h].wins++;});
+      const setupStats={};
+      t09.forEach(t=>{const s=t.setup||"Unbekannt";if(!setupStats[s])setupStats[s]={n:0,wins:0,pnl:0};setupStats[s].n++;setupStats[s].pnl+=t.pnl;if(t.pnl>0)setupStats[s].wins++;});
       const ctx={
+        // Account Status
         saldo,kontoabstand,tradeCount,todPnl,disc,todayBlocked,inPause,tradesLeft,
-        totalTrades:t09.length,
-        winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0,
         currentTime:nowHHMM(),
         currentDay:["So","Mo","Di","Mi","Do","Fr","Sa"][new Date().getDay()],
+        // Goals
         monthPnl,targetBalance:goals.targetBalance,
         missingToTarget:Math.max(0,goals.targetBalance-saldo),
-        todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time})),
-        recentTrades:t09.slice(-10).map(t=>({date:t.date,pnl:t.pnl,dir:t.dir,contract:t.contract})),
-        avgWin:t09.filter(t=>t.pnl>0).length?Math.round(t09.filter(t=>t.pnl>0).reduce((s,t)=>s+t.pnl,0)/t09.filter(t=>t.pnl>0).length):0,
-        avgLoss:t09.filter(t=>t.pnl<0).length?Math.round(t09.filter(t=>t.pnl<0).reduce((s,t)=>s+t.pnl,0)/t09.filter(t=>t.pnl<0).length):0,
-        ruleScore:disc,overtradingToday,atLimit
+        // Gesamtstatistik
+        totalTrades:t09.length,
+        winRate:t09.length?Math.round(allWins.length/t09.length*100):0,
+        avgWin:allWins.length?Math.round(allWins.reduce((s,t)=>s+t.pnl,0)/allWins.length):0,
+        avgLoss:allLoss.length?Math.round(allLoss.reduce((s,t)=>s+t.pnl,0)/allLoss.length):0,
+        totalPnl:Math.round(t09.reduce((s,t)=>s+t.pnl,0)),
+        overtradingToday,atLimit,
+        // Muster-Analyse
+        dayStats,hourStats,setupStats,
+        // Heutige Trades (voll)
+        todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time,setup:t.setup})),
+        allTrades:t09.map(t=>({d:t.date,t:t.time,p:Math.round(t.pnl),dir:t.dir,c:t.contract,s:t.setup||""})),
+        coachProfile:coachProfile||'',
+        coachMemory:coachMemory.slice(0,10).map(m=>m.date+': '+m.note).join('\n')
       };
+      // Build messages mit optionalem Bild
+      const apiMessages=newMsgs.map((m,i)=>{
+        if(i===newMsgs.length-1&&aiImage&&m.role==="user"){
+          return{role:"user",content:[
+            {type:"image",source:{type:"base64",media_type:aiImage.mediaType,data:aiImage.base64}},
+            {type:"text",text:m.content||"Analysiere diesen Chart für mich"}
+          ]};
+        }
+        return{role:m.role,content:m.content};
+      });
+      setAiImage(null);
+      setAiImagePreview(null);
       const res=await fetch('/api/chat',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({messages:newMsgs.map(m=>({role:m.role,content:m.content})),context:ctx})
+        body:JSON.stringify({messages:apiMessages,context:ctx})
       });
       const rawText=await res.text();
       if(!res.ok){
@@ -789,9 +895,9 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                     {l:"RISIKO/TRADE",v:"$"+Math.round(kontoabstand*0.02),c:R},
                     {l:"ZIEL/TRADE (2:1)",v:"$"+Math.round(kontoabstand*0.04),c:G},
                     {l:"EV PRO TAG",v:(profitPlan.dailyEV>=0?"+":"")+"$"+profitPlan.dailyEV,c:profitPlan.dailyEV>=0?G:R},
-                    {l:"PROGNOSE/MONAT",v:(profitPlan.dailyEV*22>=0?"+":"")+"$"+Math.round(profitPlan.dailyEV*22),c:profitPlan.dailyEV>=0?G:R},
-                    {l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:Y},
-                    {l:"DD ABSTAND",v:"$"+kontoabstand.toFixed(0),c:kontoabstand>1000?G:R}
+                    {l:"PROGNOSE/MONAT",v:(profitPlan.monthlyEV>=0?"+":"")+"$"+profitPlan.monthlyEV,c:profitPlan.monthlyEV>=0?G:R},
+                    {l:"ZUM ZIEL FEHLT",v:"$"+Math.max(0,goals.targetBalance-saldo).toFixed(0),c:Math.max(0,goals.targetBalance-saldo)===0?G:Y},
+                    {l:"MONATE BIS ZIEL",v:profitPlan.monthlyEV>0?Math.ceil(Math.max(0,goals.targetBalance-saldo)/profitPlan.monthlyEV)+"Mo":"∞",c:profitPlan.monthlyEV>0?G:R}
                   ].map(s=>(
                     <div key={s.l} style={{background:"#1a1f2e",borderRadius:8,padding:8}}>
                       <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>{s.l}</div>
@@ -906,10 +1012,16 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         {/* ANALYSE TAB */}
         {tab==="analyse"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
           <Card style={{borderColor:B+"44"}}>
-            <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>Monatsziel setzen</div>
+            <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>Ziele setzen</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <Field label="P&L ZIEL ($)"><input type="number" defaultValue={goals.pnl} onBlur={e=>setGoals(g=>({...g,pnl:parseInt(e.target.value)||300}))}/></Field>
-              <Field label="REGELQUOTE (%)"><input type="number" defaultValue={goals.disc} onBlur={e=>setGoals(g=>({...g,disc:parseInt(e.target.value)||80}))}/></Field>
+              <Field label="SALDO-ZIEL ($)">
+                <input type="number" defaultValue={goals.targetBalance} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){const newG={...goals,targetBalance:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                <div style={{color:"#6b7280",fontSize:9,marginTop:3}}>Fehlt: ${Math.max(0,goals.targetBalance-saldo).toFixed(0)}</div>
+              </Field>
+              <Field label="REGELQUOTE-ZIEL (%)">
+                <input type="number" defaultValue={goals.disc} onBlur={e=>{const v=parseInt(e.target.value);if(!isNaN(v)){const newG={...goals,disc:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                <div style={{color:"#6b7280",fontSize:9,marginTop:3}}>Aktuell: {disc}%</div>
+              </Field>
             </div>
           </Card>
           <Card>
@@ -1069,6 +1181,27 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             </div>
           </div>
           <div style={{marginBottom:18}}>
+            <div style={{color:B,fontWeight:700,fontSize:13,marginBottom:10}}>🧠 Coach Profil</div>
+            <div style={{background:"#0f1117",borderRadius:10,padding:12,marginBottom:8}}>
+              <div style={{color:"#6b7280",fontSize:10,marginBottom:6}}>Schreib einmal wer du bist – KI liest das IMMER:</div>
+              <textarea rows={6} value={coachProfile} onChange={e=>{setCoachProfile(e.target.value);localStorage.setItem('ttp_coach_profile',e.target.value);}}
+                placeholder="Ich bin Jeronimo. Ich trade MNQ/NQ bei TTP. Mein Problem ist Overtrading nach Verlusten. Stärke: Do/Mo 16:15-17:30..."
+                style={{resize:"vertical",fontSize:11,lineHeight:1.5,width:"100%"}}/>
+              <div style={{color:G,fontSize:9,marginTop:4}}>💡 Schreib auch Psychologie, Schwächen, Ziele</div>
+            </div>
+            {coachMemory.length>0&&<div style={{background:"#0f1117",borderRadius:10,padding:12,marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{color:"#6b7280",fontSize:10,fontWeight:700}}>📝 GEDÄCHTNIS ({coachMemory.length})</div>
+                <button onClick={()=>{if(confirm("Gedächtnis löschen?")){setCoachMemory([]);localStorage.removeItem('ttp_coach_memory');}}} style={{background:"none",color:R,fontSize:10,padding:0}}>löschen</button>
+              </div>
+              {coachMemory.slice(0,5).map((m,i)=>(
+                <div key={i} style={{fontSize:10,color:"#94a3b8",padding:"3px 0",borderBottom:"1px solid #2d3548"}}>
+                  <span style={{color:"#4b5563",fontSize:9}}>{m.date}: </span>{m.note.slice(0,80)}
+                </div>
+              ))}
+            </div>}
+          </div>
+          <div style={{marginBottom:18}}>
             <div style={{color:B,fontWeight:700,fontSize:13,marginBottom:10}}>💾 Daten</div>
             <button onClick={()=>{if(window.confirm("Alle Daten loeschen?")){{localStorage.clear();window.location.reload();}}}} style={{background:"rgba(239,68,68,0.1)",color:R,border:"1px solid rgba(239,68,68,0.3)",padding:"10px 14px",width:"100%",fontWeight:600,fontSize:12,borderRadius:10}}>🗑 Alle Daten löschen</button>
           </div>
@@ -1136,14 +1269,28 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               ))}
               {t09.length>0&&<button onClick={()=>{const last=t09[t09.length-1];setAiInput("Analysiere: "+last.contract+" "+last.dir+" "+(last.pnl>=0?"+":"")+"$"+last.pnl.toFixed(2)+" um "+last.time+" am "+last.date);}} style={{background:"rgba(0,211,149,0.15)",color:G,fontSize:10,padding:"4px 10px",borderRadius:20,border:"1px solid "+G+"44",fontWeight:600}}>📊 Letzter Trade</button>}
             </div>
-            <div style={{padding:"8px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:8}}>
+            <>
+            {aiImagePreview&&<div style={{padding:"6px 12px",borderTop:"1px solid #2d3548",display:"flex",alignItems:"center",gap:8}}>
+              <img src={aiImagePreview} alt="chart" style={{width:52,height:52,borderRadius:8,objectFit:"cover",border:"1px solid "+B+"44"}}/>
+              <div style={{fontSize:11,color:"#94a3b8",flex:1}}>📊 Chart wird mitgeschickt...</div>
+              <button onClick={()=>{setAiImage(null);setAiImagePreview(null);}} style={{background:"none",color:"#ef4444",fontSize:18,padding:"2px 6px"}}>×</button>
+            </div>}
+            <div style={{padding:"8px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:6,alignItems:"center"}}>
+              <input type="file" id="chartUpload" accept="image/*" onChange={handleImageSelect} style={{display:"none"}}/>
+              <button onClick={()=>document.getElementById("chartUpload").click()}
+                style={{background:"#1a1f2e",border:"1px solid #2d3548",color:"#94a3b8",padding:"7px 9px",borderRadius:10,fontSize:16,flexShrink:0}}
+                title="Chart Screenshot hochladen">📷</button>
+              <button onClick={startVoice}
+                style={{background:isRecording?"rgba(239,68,68,0.3)":"#1a1f2e",border:"1px solid "+(isRecording?"#ef4444":"#2d3548"),color:isRecording?"#ef4444":"#94a3b8",padding:"7px 9px",borderRadius:10,fontSize:16,flexShrink:0}}
+                title="Spracheingabe">🎤</button>
               <input value={aiInput} onChange={e=>setAiInput(e.target.value)}
                 onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendAiMessage()}
-                placeholder="Frag deinen Trading Coach..."
-                style={{flex:1,fontSize:12,padding:"8px 12px",borderRadius:20,background:"#0f1117",border:"1px solid #2d3548"}}/>
-              <button onClick={sendAiMessage} disabled={aiLoading||!aiInput.trim()}
-                style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"8px 14px",borderRadius:20,fontSize:14,fontWeight:700,opacity:aiLoading||!aiInput.trim()?0.4:1}}>→</button>
+                placeholder={isRecording?"🎤 Höre zu...":"Frag deinen Coach..."}
+                style={{flex:1,fontSize:12,padding:"8px 10px",borderRadius:20,background:"#0f1117",border:"1px solid #2d3548"}}/>
+              <button onClick={sendAiMessage} disabled={aiLoading||(!aiInput.trim()&&!aiImage)}
+                style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"8px 12px",borderRadius:20,fontSize:14,fontWeight:700,opacity:aiLoading||(!aiInput.trim()&&!aiImage)?0.4:1,flexShrink:0}}>→</button>
             </div>
+            </>
           </div>
         )}
       </div>
