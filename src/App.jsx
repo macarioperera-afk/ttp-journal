@@ -413,20 +413,9 @@ export default function App(){
 
     let prompt="";
     if(type==="daily_motivation"){
-      prompt=`Gib mir mein persönliches Tages-Briefing für heute (${tod}).
-
-GESTRIGE TRADES (${yT.length} Trades, P&L: ${yPnl>=0?"+":""}$${yPnl}):
-${yT.map(t=>`• ${t.time} ${t.contract} ${t.dir} ${t.pnl>=0?"+":""}$${t.pnl.toFixed(0)}`).join("
-")||"Kein Trading gestern"}
-
-MEINE STATS:
-• ${tod}-WR historisch: ${dayWR}% (${dayMap[tod]?.n||0} Trades)
-• Gesamt WR: ${wr}% aus ${t09.length} Trades
-• Aktueller Streak: ${currentStreak>0?"+"+currentStreak+" Gewinne":currentStreak<0?currentStreak+" Verluste":"Neutral"}
-• Saldo: $${saldo.toFixed(2)} | Ziel: $${goals.targetBalance} | Fehlt: $${Math.max(0,goals.targetBalance-saldo).toFixed(0)}
-• Kontoabstand: $${kontoabstand.toFixed(0)}
-
-Analysiere gestrige Trades kurz, gib mir eine klare Empfehlung für heute und eine persönliche Motivation. Max 5 Sätze.`;
+      const yTradesStr=yT.length?yT.map(t=>"• "+t.time+" "+t.contract+" "+t.dir+" "+(t.pnl>=0?"+":"")+"$"+t.pnl.toFixed(0)).join("\n"):"Kein Trading gestern";
+      const statsStr="• "+tod+"-WR historisch: "+dayWR+"% ("+((dayMap[tod]?.n)||0)+" Trades)\n• Gesamt WR: "+wr+"% aus "+t09.length+" Trades\n• Streak: "+(currentStreak>0?"+"+currentStreak+" Gewinne":currentStreak<0?currentStreak+" Verluste":"Neutral")+"\n• Saldo: $"+saldo.toFixed(2)+" | Ziel: $"+goals.targetBalance+" | Fehlt: $"+Math.max(0,goals.targetBalance-saldo).toFixed(0)+"\n• Kontoabstand: $"+kontoabstand.toFixed(0);
+      prompt="Gib mir mein persönliches Tages-Briefing für heute ("+tod+").\n\nGESTRIGE TRADES ("+yT.length+" Trades, P&L: "+(yPnl>=0?"+":"")+"$"+yPnl+"):\n"+yTradesStr+"\n\nMEINE STATS:\n"+statsStr+"\n\nAnalysiere gestrige Trades kurz, gib mir eine klare Empfehlung für heute und eine persönliche Motivation. Max 5 Sätze.";
     }
     else if(type==="after_trade"&&tradeData){
       const tod2=t09.filter(t=>t.date===todayISO());
