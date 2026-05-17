@@ -374,10 +374,104 @@ export default function App(){
     return "Aktuell: "+t09.length+" Trades, "+wr+"% WR, Saldo $"+saldo.toFixed(0)+". Heute ("+tod+"): "+todayT.length+"/2, "+(todPnlV>=0?"+":"")+"$"+todPnlV.toFixed(0)+". Frag: 'soll ich traden', 'heute', 'kontoabstand', 'regeln'.";
   };
 
-  const triggerAiPopup=(type)=>{
+  const triggerAiPopup=async(type,tradeData)=>{
     setAiOpen(true);
-    const response=smartCoach("",type);
-    setAiMessages([{role:"assistant",content:response,auto:true}]);
+    setAiLoading(true);
+    setAiMessages([{role:"assistant",content:"⏳ Analysiere...",auto:true}]);
+    
+    const DAYS=["So","Mo","Di","Mi","Do","Fr","Sa"];
+    const tod=DAYS[new Date().getDay()];
+    const dayMap={};t09.forEach(t=>{const d=DAYS[new Date(t.date).getDay()];if(!dayMap[d])dayMap[d]={w:0,n:0,pnl:0};dayMap[d].n++;dayMap[d].pnl+=t.pnl;if(t.pnl>0)dayMap[d].w++;});
+    const dayWR=dayMap[tod]?Math.round(dayMap[tod].w/dayMap[tod].n*100):0;
+    const yesterdayISO=()=>{const d=new Date();d.setDate(d.getDate()-1);while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()-1);return d.toISOString().split("T")[0];};
+    const yT=t09.filter(t=>t.date===yesterdayISO());
+    const yPnl=Math.round(yT.reduce((s,t)=>s+t.pnl,0)*100)/100;
+    const wins=t09.filter(t=>t.pnl>0).length;
+    const wr=t09.length?Math.round(wins/t09.length*100):0;
+    const streak=()=>{let s=0;const r=[...t09].reverse();for(const t of r){if(t.pnl>0)s>0?s++:s===0?s=1:s=1;else s<0?s--:s===0?s=-1:s=-1;break;}return s;};
+    const currentStreak=streak();
+
+    let prompt="";
+    if(type==="daily_motivation"){
+      prompt=`Gib mir mein persönliches Tages-Briefing für heute (${tod}).
+
+GESTRIGE TRADES (${yT.length} Trades, P&L: ${yPnl>=0?"+":""}$${yPnl}):
+${yT.map(t=>`• ${t.time} ${t.contract} ${t.dir} ${t.pnl>=0?"+":""}$${t.pnl.toFixed(0)}`).join("
+")||"Kein Trading gestern"}
+
+MEINE STATS:
+• ${tod}-WR historisch: ${dayWR}% (${dayMap[tod]?.n||0} Trades)
+• Gesamt WR: ${wr}% aus ${t09.length} Trades
+• Aktueller Streak: ${currentStreak>0?"+"+currentStreak+" Gewinne":currentStreak<0?currentStreak+" Verluste":"Neutral"}
+• Saldo: $${saldo.toFixed(2)} | Ziel: $${goals.targetBalance} | Fehlt: $${Math.max(0,goals.targetBalance-saldo).toFixed(0)}
+• Kontoabstand: $${kontoabstand.toFixed(0)}
+
+Analysiere gestrige Trades kurz, gib mir eine klare Empfehlung für heute und eine persönliche Motivation. Max 5 Sätze.`;
+    }
+    else if(type==="after_trade"&&tradeData){
+      const tod2=t09.filter(t=>t.date===todayISO());
+      const ruleScore=Object.values(tradeData.rules||{}).filter(Boolean).length;
+      const totalRules=Object.keys(tradeData.rules||{}).length;
+      const rulePct=totalRules?Math.round(ruleScore/totalRules*100):0;
+      const recentLosses=t09.slice(-5).filter(t=>t.pnl<0).length;
+      prompt=`Analysiere meinen Trade und gib mir direktes Feedback:
+
+TRADE: ${tradeData.contract} ${tradeData.dir} um ${tradeData.time}
+P&L: ${tradeData.pnl>=0?"+":""}$${tradeData.pnl.toFixed(2)}
+Regelquote: ${rulePct}% (${ruleScore}/${totalRules} Regeln)
+Setup: ${tradeData.setup||"Nicht angegeben"}
+Trade Nr. heute: ${tod2.length}/${DAILY_LIMIT}
+
+KONTEXT:
+• Letzte 5 Trades: ${t09.slice(-5).map(t=>t.pnl>=0?"+$"+t.pnl.toFixed(0):"-$"+Math.abs(t.pnl).toFixed(0)).join(", ")}
+• Verluste in letzten 5: ${recentLosses}
+• Heutige P&L: ${todPnl>=0?"+":""}$${todPnl.toFixed(0)}
+
+Sei direkt und ehrlich. Erkenne Muster wenn du sie siehst. Max 4 Sätze.`;
+    }
+    else if(type==="overtrading"){
+      const tod3=t09.filter(t=>t.date===todayISO());
+      prompt=`NOTFALL: Jeronimo hat gerade seinen ${tod3.length}. Trade gemacht (Limit: ${DAILY_LIMIT}).
+
+Heutige Trades:
+${tod3.map(t=>`• ${t.time} ${t.contract} ${t.pnl>=0?"+":""}$${t.pnl.toFixed(0)}`).join("
+")}
+Heutige P&L: ${todPnl>=0?"+":""}$${todPnl.toFixed(0)}
+
+Gib eine KLARE STOPP-Nachricht. Kurz, direkt, keine Ausreden akzeptieren. Max 3 Sätze.`;
+    }
+    else if(type==="trading_window"){
+      prompt=`Das Trading-Fenster (16:15-17:30) ist gerade geöffnet.
+
+HEUTE (${tod}):
+• Bisherige Trades: ${tradeCount}/${DAILY_LIMIT}
+• P&L heute: ${todPnl>=0?"+":""}$${todPnl.toFixed(0)}
+• ${tod}-WR historisch: ${dayWR}%
+• Kontoabstand: $${kontoabstand.toFixed(0)}
+
+Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`;
+    }
+    else{
+      setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);
+      setAiLoading(false);
+      return;
+    }
+
+    try{
+      const ctx={saldo,kontoabstand,tradeCount,todPnl,disc,todayBlocked,inPause,tradesLeft,
+        totalTrades:t09.length,winRate:wr,currentDay:tod,dayWR,monthPnl,targetBalance:goals.targetBalance};
+      const res=await fetch('/api/chat',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({messages:[{role:"user",content:prompt}],context:ctx})
+      });
+      const rawText=await res.text();
+      if(!res.ok){setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);return;}
+      const data=JSON.parse(rawText);
+      if(data.message)setAiMessages([{role:"assistant",content:data.message,auto:true}]);
+      else setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);
+    }catch(err){
+      setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);
+    }finally{setAiLoading(false);}
   };
 
   const sendAiMessage=async()=>{
@@ -439,7 +533,7 @@ export default function App(){
     setForm(emptyForm());
     showToast("Gespeichert! 15-Min Pause startet...");
     setTab("dash");
-    setTimeout(()=>triggerAiPopup("after_trade"),1000);
+    setTimeout(()=>triggerAiPopup("after_trade",newT),1000);
     setChecks({c1:false,c2:false,c3:false,c4:false});
     localStorage.removeItem("ttp_checks");
   };
@@ -1037,9 +1131,10 @@ export default function App(){
               )}
             </div>
             <div style={{padding:"6px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:6,flexWrap:"wrap"}}>
-              {["Soll ich traden?","Performance?","Kontoabstand?"].map(q=>(
+              {["Soll ich traden?","Analysiere meine Schwächen","Beste Handelszeit?","Diese Woche?"].map(q=>(
                 <button key={q} onClick={()=>{setAiInput(q);}} style={{background:"rgba(99,102,241,0.15)",color:B,fontSize:10,padding:"4px 10px",borderRadius:20,border:"1px solid "+B+"44",fontWeight:600}}>{q}</button>
               ))}
+              {t09.length>0&&<button onClick={()=>{const last=t09[t09.length-1];setAiInput("Analysiere: "+last.contract+" "+last.dir+" "+(last.pnl>=0?"+":"")+"$"+last.pnl.toFixed(2)+" um "+last.time+" am "+last.date);}} style={{background:"rgba(0,211,149,0.15)",color:G,fontSize:10,padding:"4px 10px",borderRadius:20,border:"1px solid "+G+"44",fontWeight:600}}>📊 Letzter Trade</button>}
             </div>
             <div style={{padding:"8px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:8}}>
               <input value={aiInput} onChange={e=>setAiInput(e.target.value)}
