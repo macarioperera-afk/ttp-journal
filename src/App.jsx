@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 const G="#00d395",R="#ef4444",B="#6366f1",Y="#f59e0b",P="#a855f7",O="#f97316";
@@ -219,7 +219,15 @@ export default function App(){
 
   useEffect(()=>{
     const t=setTimeout(()=>setShowSplash(false),1800);
-    const t2=setTimeout(()=>triggerAiPopup("daily_motivation"),2200);
+    const t2=setTimeout(()=>{
+      const DAYS=["So","Mo","Di","Mi","Do","Fr","Sa"];
+      const tod=DAYS[new Date().getDay()];
+      const h=new Date().getHours();
+      const m=new Date().getMinutes();
+      const inWindow=(h===16&&m>=15)||(h===17&&m<=30);
+      setAiOpen(true);
+      setAiMessages([{role:"assistant",content:"Guten Morgen Jeronimo! 👋\n\nHeute ist "+tod+". "+(inWindow?"⚡ Trading-Fenster ist OFFEN!":"Trading-Fenster: 16:15–17:30 Uhr.")+"\n\nTippe '☀️ Tages-Briefing' für die volle KI-Analyse – oder stell direkt eine Frage!",auto:true}]);
+    },2200);
     return()=>{clearTimeout(t);clearTimeout(t2);};
   },[]);
 
@@ -881,8 +889,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                     <span style={{color:"#6b7280",fontSize:10}}>Regelquote</span>
                     <span style={{color:sc(disc),fontSize:10,fontWeight:700}}>{disc}% / {goals.disc}%</span>
-                  </div>
-                  <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
+                  </div> 
+                                    <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
                 </div>
               );
             })()}
@@ -1282,6 +1290,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               <div ref={aiMessagesEndRef}/>
             </div>
             <div style={{padding:"6px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:6,flexWrap:"wrap"}}>
+              <button onClick={()=>triggerAiPopup("daily_motivation")} style={{background:"rgba(0,211,149,0.15)",color:G,fontSize:10,padding:"4px 10px",borderRadius:20,border:"1px solid "+G+"44",fontWeight:700}}>☀️ Tages-Briefing</button>
               {["Soll ich traden?","Analysiere meine Schwächen","Beste Handelszeit?","Diese Woche?"].map(q=>(
                 <button key={q} onClick={()=>{setAiInput(q);}} style={{background:"rgba(99,102,241,0.15)",color:B,fontSize:10,padding:"4px 10px",borderRadius:20,border:"1px solid "+B+"44",fontWeight:600}}>{q}</button>
               ))}
