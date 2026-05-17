@@ -110,8 +110,8 @@ const emptyForm=()=>({date:todayISO(),time:nowHHMM(),contract:"MNQ",dir:"LONG",p
 const Pill=({bg,color,children})=>(
   <span style={{display:"inline-block",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:bg,color}}>{children}</span>
 );
-const Card=({children,style})=>(
-  <div style={{background:"#1a1f2e",border:"1px solid #2d3548",borderRadius:12,padding:16,overflow:"hidden",...style}}>{children}</div>
+const Card=({children,style,onClick})=>(
+  <div onClick={onClick} style={{background:"#1a1f2e",border:"1px solid #2d3548",borderRadius:12,padding:16,overflow:"hidden",...style}}>{children}</div>
 );
 const Bar2=({pct,color})=>(
   <div style={{height:8,borderRadius:4,background:"#2d3548"}}>
@@ -170,8 +170,8 @@ export default function App(){
   });
   const[form,setForm]=useState(emptyForm());
   const[goals,setGoals]=useState(()=>{
-    try{const s=localStorage.getItem('ttp_goals');return s?JSON.parse(s):{pnl:1500,disc:80};}
-    catch(e){return{pnl:1500,disc:80};}
+    try{const s=localStorage.getItem('ttp_goals');return s?JSON.parse(s):{pnl:1500,disc:80,targetBalance:53000};}
+    catch(e){return{pnl:1500,disc:80,targetBalance:53000};}
   });
   const[settingsOpen,setSettingsOpen]=useState(false);
   const[settings,setSettings]=useState(()=>{
@@ -388,11 +388,20 @@ export default function App(){
     setAiInput("");
     setAiLoading(true);
     try{
-      const ctx={saldo,kontoabstand,tradeCount,todPnl,disc,todayBlocked,inPause,tradesLeft,
+      const ctx={
+        saldo,kontoabstand,tradeCount,todPnl,disc,todayBlocked,inPause,tradesLeft,
         totalTrades:t09.length,
         winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0,
         currentTime:nowHHMM(),
-        currentDay:["So","Mo","Di","Mi","Do","Fr","Sa"][new Date().getDay()]};
+        currentDay:["So","Mo","Di","Mi","Do","Fr","Sa"][new Date().getDay()],
+        monthPnl,targetBalance:goals.targetBalance,
+        missingToTarget:Math.max(0,goals.targetBalance-saldo),
+        todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time})),
+        recentTrades:t09.slice(-10).map(t=>({date:t.date,pnl:t.pnl,dir:t.dir,contract:t.contract})),
+        avgWin:t09.filter(t=>t.pnl>0).length?Math.round(t09.filter(t=>t.pnl>0).reduce((s,t)=>s+t.pnl,0)/t09.filter(t=>t.pnl>0).length):0,
+        avgLoss:t09.filter(t=>t.pnl<0).length?Math.round(t09.filter(t=>t.pnl<0).reduce((s,t)=>s+t.pnl,0)/t09.filter(t=>t.pnl<0).length):0,
+        ruleScore:disc,overtradingToday,atLimit
+      };
       const res=await fetch('/api/chat',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -592,11 +601,11 @@ export default function App(){
               <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
             </div>
             <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <Field label="SALDO (AUS TTP)">
-                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}}/>
+              <Field label="SALDO ($)">
+                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
               </Field>
-              <Field label="MAX DD LEVEL (AUS TTP)">
-                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}}/>
+              <Field label="MAX DD ($)">
+                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
               </Field>
             </div>
           </Card>
@@ -619,13 +628,47 @@ export default function App(){
           </Card>
 
           <Card style={{borderColor:P+"33"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontWeight:700}}>Monatsziel – {todayISO().slice(0,7)}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:15}}>Monatsziel</div>
+              <button onClick={(e)=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"33",color:P,fontSize:11,padding:"4px 10px",borderRadius:8,fontWeight:600}}>✏️ Ziel</button>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#6b7280",fontSize:10}}>P&L</span><span style={{color:pc(monthPnl),fontSize:10,fontWeight:700}}>{fs(monthPnl)} / ${goals.pnl}</span></div><Bar2 pct={Math.min(100,Math.max(0,monthPnl)/goals.pnl*100)} color={monthPnl>=goals.pnl?G:B}/></div>
-              <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#6b7280",fontSize:10}}>Regelquote</span><span style={{color:sc(disc),fontSize:10,fontWeight:700}}>{disc}% / {goals.disc}%</span></div><Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/></div>
-            </div>
+            {(()=>{
+              const missing=Math.max(0,goals.targetBalance-saldo);
+              const gained=Math.max(0,saldo-(goals.targetBalance-2000));
+              const pct=Math.min(100,Math.max(0,(saldo-Math.min(saldo,goals.targetBalance-2000))/(goals.targetBalance-Math.min(saldo,goals.targetBalance-2000))*100));
+              return(
+                <div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+                    <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>AKTUELL</div>
+                      <div style={{color:"#e2e8f0",fontWeight:800,fontSize:14}}>${saldo.toLocaleString("de-DE",{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+                    </div>
+                    <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>ZIEL</div>
+                      <div style={{color:P,fontWeight:800,fontSize:14}}>${goals.targetBalance.toLocaleString("de-DE")}</div>
+                    </div>
+                    <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>FEHLT</div>
+                      <div style={{color:missing<=0?G:R,fontWeight:800,fontSize:14}}>{missing<=0?"✅ Erreicht!":"$"+Math.round(missing).toLocaleString("de-DE")}</div>
+                    </div>
+                  </div>
+                  <div style={{marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{color:"#6b7280",fontSize:10}}>Fortschritt zum Ziel</span>
+                      <span style={{color:missing<=0?G:B,fontWeight:700,fontSize:10}}>{Math.round(Math.min(100,(saldo/goals.targetBalance)*100))}%</span>
+                    </div>
+                    <div style={{height:10,borderRadius:5,background:"#2d3548",overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:5,width:Math.min(100,(saldo/goals.targetBalance)*100)+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{color:"#6b7280",fontSize:10}}>Regelquote</span>
+                    <span style={{color:sc(disc),fontSize:10,fontWeight:700}}>{disc}% / {goals.disc}%</span>
+                  </div>
+                  <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
+                </div>
+              );
+            })()}
           </Card>
 
           {profitPlan&&<Card style={{borderColor:G+"33",background:"#0a160f",cursor:"pointer"}} onClick={()=>setProfExpanded(p=>!p)}>
@@ -723,10 +766,10 @@ export default function App(){
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <Field label="DATUM">
-                  <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+                  <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/>
                 </Field>
                 <Field label="UHRZEIT">
-                  <input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
+                  <input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/>
                 </Field>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -836,8 +879,8 @@ export default function App(){
           <Card>
             <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>🔍 Filter</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <Field label="VON"><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></Field>
-              <Field label="BIS"><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></Field>
+              <Field label="VON"><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
+              <Field label="BIS"><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
             </div>
             {(dateFrom||dateTo)&&<button onClick={()=>{setDateFrom("");setDateTo("");}} style={{background:"none",color:"#6b7280",fontSize:11,padding:"4px 0",width:"100%"}}>Filter zurücksetzen ×</button>}
           </Card>
