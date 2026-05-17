@@ -526,7 +526,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
     setIsRecording(true);
     try{rec.start();}catch(e){setIsRecording(false);showToast("Mikrofon Fehler: "+e.message);return;}
     rec.onresult=(e)=>{
-      let interim="",final="";
+            let interim="",final="";
       for(let i=e.resultIndex;i<e.results.length;i++){
         if(e.results[i].isFinal)final+=e.results[i][0].transcript;
         else interim+=e.results[i][0].transcript;
@@ -538,7 +538,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       setIsRecording(false);
       // Auto-send after voice input
       setAiInput(prev=>{
-                if(prev&&prev.trim()){
+        if(prev&&prev.trim()){
           setTimeout(()=>{
             const btn=document.getElementById("aiSendBtn");
             if(btn)btn.click();
@@ -1019,42 +1019,6 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             })()}
           </Card>
         </div>}
-                  <div style={{background:"#0f1117",borderRadius:10,padding:12,marginBottom:8}}>
-                    <div style={{color:G,fontWeight:700,fontSize:12,marginBottom:8}}>📐 Setup für 1 MNQ:</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:6}}>
-                      {[{l:"SL",v:"40T = $20",c:R},{l:"TP",v:"80T = $40",c:G},{l:"CRV",v:"2:1",c:Y}].map(s=>(
-                        <div key={s.l} style={{background:"#1a1f2e",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
-                          <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:800,fontSize:13,whiteSpace:"pre-line"}}>{s.v}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                      {[
-                        {l:"EV / TRADE",v:(evTrade>=0?"+":"")+"$"+evTrade,c:evTrade>=0?G:R},
-                        {l:"EV / TAG (2 Trades)",v:(evDay>=0?"+":"")+"$"+evDay,c:evDay>=0?G:R},
-                        {l:"PROGNOSE MONAT",v:(projMonth>=0?"+":"")+"$"+projMonth+" ("+daysLeft+"T)",c:projMonth>=0?G:R},
-                        {l:"MONATE BIS ZIEL",v:monateBisZiel?monateBisZiel+"Mo bei akt. Form":"∞",c:monateBisZiel&&monateBisZiel<=6?G:Y},
-                      ].map(s=>(
-                        <div key={s.l} style={{background:"#1a1f2e",borderRadius:7,padding:"7px 8px"}}>
-                          <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{background:"#0f1117",borderRadius:8,padding:"10px 12px",border:"1px solid "+G+"22"}}>
-                    <div style={{color:G,fontSize:11,fontWeight:700,marginBottom:6}}>💡 Weg zur Profitabilität:</div>
-                    {profitPlan.wr<profitPlan.neededWR&&<div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>• Deine WR ({profitPlan.wr}%) liegt unter dem Break-Even ({profitPlan.neededWR}%). Fokus auf Setup-Qualität, nicht Quantität.</div>}
-                    {profitPlan.overtradeDays>0&&<div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>• {profitPlan.overtradeDays} Tage Overtrading = verlorene Disziplin. Max 2 Trades/Tag einhalten.</div>}
-                    <div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>• Mit 47% WR und 2:1 CRV ist positiver EV möglich. Konsequenz ist der Schlüssel.</div>
-                    <div style={{color:G,fontSize:11,fontWeight:600}}>• Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel.</div>
-                  </div>
-                </div>
-              );
-            })()}
-          </Card>}
-        </div>}
 
         {/* REGELN TAB */}
         {tab==="check"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -1078,7 +1042,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             <div style={{marginTop:12,background:allChecked?G+"22":R+"11",border:"1px solid "+(allChecked?G:R)+"44",borderRadius:10,padding:12,textAlign:"center"}}>
               {allChecked?<div style={{color:G,fontWeight:800,fontSize:17}}>GRUENES LICHT ✅</div>:<div style={{color:R,fontWeight:700,fontSize:15}}>Noch nicht bereit</div>}
             </div>
-                      </Card>}
+          </Card>}
           <Card style={{background:"#12101a",borderColor:P+"33"}}>
             <div style={{color:P,fontWeight:700,marginBottom:8}}>Meine Regeln</div>
             {["1 MNQ – kein NQ bis profitabel","Max 2 Trades/Tag","15 Min Pause nach jedem Trade","Nur 16:15–17:30 Uhr","SL + TP vor dem Entry","Ein 3. Trade sperrt morgen"].map((r,i)=>(
@@ -1090,7 +1054,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>}
 
         {/* LOGGEN TAB */}
-        {tab==="log"&&<div>
+                {tab==="log"&&<div>
           {!allChecked&&!inPause&&!todayBlocked&&!atLimit&&<div style={{background:"linear-gradient(135deg,rgba(239,68,68,0.12),rgba(245,158,11,0.08))",border:"2px solid rgba(239,68,68,0.5)",borderRadius:14,padding:"18px",marginBottom:14,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:8}}>🔒</div>
             <div style={{color:R,fontWeight:800,fontSize:16,marginBottom:6}}>Routine zuerst!</div>
