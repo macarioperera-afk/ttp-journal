@@ -493,20 +493,47 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 
   const startVoice=()=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){showToast("Spracheingabe nicht unterstützt");return;}
+    if(!SR){
+      // Fallback: show input field with prompt
+      showToast("Tippe deine Frage ein 👆");
+      return;
+    }
+    if(isRecording){setIsRecording(false);return;}
     const rec=new SR();
     rec.lang="de-DE";
     rec.continuous=false;
-    rec.interimResults=false;
+    rec.interimResults=true;
+    rec.maxAlternatives=1;
     setIsRecording(true);
-    rec.start();
+    try{rec.start();}catch(e){setIsRecording(false);showToast("Mikrofon Fehler: "+e.message);return;}
     rec.onresult=(e)=>{
-      const text=e.results[0][0].transcript;
-      setAiInput(text);
-      setIsRecording(false);
+      let interim="",final="";
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal)final+=e.results[i][0].transcript;
+        else interim+=e.results[i][0].transcript;
+      }
+      const text=final||interim;
+      if(text)setAiInput(text);
     };
-    rec.onerror=()=>setIsRecording(false);
-    rec.onend=()=>setIsRecording(false);
+    rec.onend=()=>{
+      setIsRecording(false);
+      // Auto-send after voice input
+      setAiInput(prev=>{
+        if(prev&&prev.trim()){
+          setTimeout(()=>{
+            const btn=document.getElementById("aiSendBtn");
+            if(btn)btn.click();
+          },300);
+        }
+        return prev;
+      });
+    };
+    rec.onerror=(e)=>{
+      setIsRecording(false);
+      if(e.error==="not-allowed")showToast("Mikrofon-Zugriff verweigert – Einstellungen prüfen");
+      else if(e.error==="no-speech")showToast("Nichts gehört – nochmal versuchen");
+      else showToast("Sprachfehler: "+e.error);
+    };
   };
 
   const handleImageSelect=(e)=>{
@@ -1282,7 +1309,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendAiMessage()}
                 placeholder={isRecording?"🎤 Höre zu...":"Frag deinen Coach..."}
                 style={{flex:1,fontSize:12,padding:"8px 10px",borderRadius:20,background:"#0f1117",border:"1px solid #2d3548"}}/>
-              <button onClick={sendAiMessage} disabled={aiLoading||(!aiInput.trim()&&!aiImage)}
+              <button id="aiSendBtn" onClick={sendAiMessage} disabled={aiLoading||(!aiInput.trim()&&!aiImage)}
                 style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"8px 12px",borderRadius:20,fontSize:14,fontWeight:700,opacity:aiLoading||(!aiInput.trim()&&!aiImage)?0.4:1,flexShrink:0}}>→</button>
             </div>
             </>
