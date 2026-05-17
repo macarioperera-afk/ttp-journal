@@ -39,6 +39,10 @@ export default async function handler(req, res) {
 
     const systemPrompt = buildSystemPrompt(context);
 
+    // Sonnet für Bilder (bessere Vision), Haiku für Text (günstiger)
+    const hasImage = messages.some(m => Array.isArray(m.content));
+    const model = hasImage ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -47,7 +51,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model,
         max_tokens: 2048,
         system: systemPrompt,
         messages: messages
@@ -110,8 +114,17 @@ KONTO:
 - TTP (The Trading Pit), Konto P1-235109
 - Instrument: MNQ Futures
 
+PERSÖNLICHES PROFIL (permanent gespeichert):
+${ctx.coachProfile || 'Noch nicht eingerichtet – User soll Profil in Settings ausfüllen'}
+
+COACH GEDÄCHTNIS (aus vergangenen Sessions):
+${ctx.coachMemory || 'Noch keine gespeicherten Erkenntnisse'}
+
 AKTUELLE LIVE-DATEN:
-${JSON.stringify(ctx, null, 2)}
+${JSON.stringify({...ctx, allTrades: undefined, coachProfile: undefined, coachMemory: undefined}, null, 2)}
+
+ALLE HISTORISCHEN TRADES (kompakt - für Muster-Analyse):
+${ctx.allTrades ? ctx.allTrades : 'Keine Daten'}
 
 DEINE ROLLE:
 - Ehrlicher Trading-Coach und Psychologe
