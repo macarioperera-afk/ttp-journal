@@ -187,6 +187,7 @@ export default function App(){
   });
   const saveSettings=(s)=>{setSettings(s);localStorage.setItem('ttp_settings',JSON.stringify(s));};
   const[profExpanded,setProfExpanded]=useState(false);
+  const[monatExp,setMonatExp]=useState(false);
   const[coachProfile,setCoachProfile]=useState(()=>{
     try{return localStorage.getItem('ttp_coach_profile')||'';}catch(e){return'';}
   });
@@ -226,7 +227,8 @@ export default function App(){
       const m=new Date().getMinutes();
       const inWindow=(h===16&&m>=15)||(h===17&&m<=30);
       setAiOpen(true);
-      setAiMessages([{role:"assistant",content:"Guten Morgen Jeronimo! 👋\n\nHeute ist "+tod+". "+(inWindow?"⚡ Trading-Fenster ist OFFEN!":"Trading-Fenster: 16:15–17:30 Uhr.")+"\n\nTippe '☀️ Tages-Briefing' für die volle KI-Analyse – oder stell direkt eine Frage!",auto:true}]);
+      const greet=h<12?"Guten Morgen":h<17?"Hi":h<21?"Guten Abend":"Hey";
+      setAiMessages([{role:"assistant",content:greet+" Jeronimo! 👋\n\nHeute ist "+tod+". "+(inWindow?"⚡ Trading-Fenster ist OFFEN!":"Trading-Fenster: 16:15–17:30 Uhr.")+"\n\nTippe '☀️ Tages-Briefing' für die volle KI-Analyse – oder stell direkt eine Frage!",auto:true}]);
     },2200);
     return()=>{clearTimeout(t);clearTimeout(t2);};
   },[]);
@@ -852,86 +854,153 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>{renderCal()}</div>
           </Card>
 
-          <Card style={{borderColor:P+"33"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:15}}>Monatsziel</div>
-              <button onClick={(e)=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"33",color:P,fontSize:11,padding:"4px 10px",borderRadius:8,fontWeight:600}}>✏️ Ziel</button>
+          {/* BLOCK 1: MONATSZIEL */}
+          <Card style={{borderColor:B+"33",background:"#0f1523"}} onClick={()=>setMonatExp(p=>!p)}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontWeight:700,fontSize:15,color:"#e2e8f0"}}>🎯 Monatsziel</div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"33",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️ Ziel</button>
+                <span style={{color:B,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span>
+              </div>
             </div>
             {(()=>{
+              const startSaldo=saldo-monthPnl;
+              const monthNeeded=Math.max(1,goals.targetBalance-startSaldo);
+              const monthPct=Math.round(Math.min(100,Math.max(0,monthPnl/monthNeeded*100)));
               const missing=Math.max(0,goals.targetBalance-saldo);
-              const gained=Math.max(0,saldo-(goals.targetBalance-2000));
-              const pct=Math.min(100,Math.max(0,(saldo-Math.min(saldo,goals.targetBalance-2000))/(goals.targetBalance-Math.min(saldo,goals.targetBalance-2000))*100));
               return(
                 <div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-                    <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>AKTUELL</div>
-                      <div style={{color:"#e2e8f0",fontWeight:800,fontSize:14}}>${saldo.toLocaleString("de-DE",{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
+                    {[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#e2e8f0"},
+                      {l:"ZIEL",v:"$"+goals.targetBalance.toLocaleString("de-DE"),c:P},
+                      {l:"FEHLT",v:missing<=0?"✅":"-$"+Math.round(missing).toLocaleString("de-DE"),c:missing<=0?G:R}
+                    ].map(s=>(
+                      <div key={s.l} style={{background:"#0a0f1e",borderRadius:8,padding:"7px 8px",textAlign:"center"}}>
+                        <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                        <div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginBottom:6}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <span style={{color:"#6b7280",fontSize:10}}>Monatsfortschritt</span>
+                      <span style={{color:monthPct>=100?G:B,fontWeight:700,fontSize:10}}>{monthPct}% ({fs(monthPnl)} von {fs(monthNeeded)})</span>
                     </div>
-                    <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>ZIEL</div>
-                      <div style={{color:P,fontWeight:800,fontSize:14}}>${goals.targetBalance.toLocaleString("de-DE")}</div>
-                    </div>
-                    <div style={{background:"#0f1117",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>FEHLT</div>
-                      <div style={{color:missing<=0?G:R,fontWeight:800,fontSize:14}}>{missing<=0?"✅ Erreicht!":"$"+Math.round(missing).toLocaleString("de-DE")}</div>
+                    <div style={{height:8,borderRadius:4,background:"#1a2035",overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:4,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
                     </div>
                   </div>
-                  <div style={{marginBottom:8}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                      <span style={{color:"#6b7280",fontSize:10}}>Fortschritt zum Ziel</span>
-                      <span style={{color:missing<=0?G:B,fontWeight:700,fontSize:10}}>{Math.round(Math.min(100,(saldo/goals.targetBalance)*100))}%</span>
-                    </div>
-                    <div style={{height:10,borderRadius:5,background:"#2d3548",overflow:"hidden"}}>
-                      <div style={{height:"100%",borderRadius:5,width:Math.min(100,(saldo/goals.targetBalance)*100)+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                    <span style={{color:"#6b7280",fontSize:10}}>Regelquote</span>
-                    <span style={{color:sc(disc),fontSize:10,fontWeight:700}}>{disc}% / {goals.disc}%</span>
-                  </div> 
-                                    <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
+                  {monatExp&&(()=>{
+                    const today=new Date();
+                    const endM=new Date(today.getFullYear(),today.getMonth()+1,0);
+                    let daysLeft=0;
+                    for(let dt=new Date(today);dt<=endM;dt.setDate(dt.getDate()+1)){const d=dt.getDay();if(d!==0&&d!==6)daysLeft++;}
+                    const tradesToday=todT.length;
+                    const tradesLeft2=Math.max(0,DAILY_LIMIT-tradesToday);
+                    const maxTradesLeft=daysLeft*DAILY_LIMIT;
+                    const profitPerDayNeeded=daysLeft>0?Math.ceil(missing/daysLeft):0;
+                    const profitPerTradeNeeded=profitPerDayNeeded>0?Math.ceil(profitPerDayNeeded/DAILY_LIMIT):0;
+                    const slTicks=40;const tpTicks=80;const crv=2;
+                    const slDollar=slTicks*0.5;const tpDollar=tpTicks*0.5;
+                    const wr=t09.length?t09.filter(t=>t.pnl>0).length/t09.length:0.47;
+                    const evPerTrade=Math.round(wr*tpDollar-(1-wr)*slDollar);
+                    const projMonthPnl=Math.round(daysLeft*DAILY_LIMIT*evPerTrade);
+                    return(
+                      <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1a2035"}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+                          {[
+                            {l:"HANDELSTAGE NOCH",v:daysLeft+" Tage",c:daysLeft>0?G:R},
+                            {l:"GEWINN/TAG NÖTIG",v:missing<=0?"✅ Erreicht!":"$"+profitPerDayNeeded,c:missing<=0?G:Y},
+                            {l:"GEWINN/TRADE NÖTIG",v:missing<=0?"✅":"$"+profitPerTradeNeeded,c:missing<=0?G:Y},
+                            {l:"MAX TRADES NOCH",v:maxTradesLeft+" ("+daysLeft+"T × 2)",c:"#e2e8f0"},
+                            {l:"PROGNOSE MONAT",v:(projMonthPnl>=0?"+":"")+"$"+projMonthPnl,c:projMonthPnl>=0?G:R},
+                            {l:"REGELQUOTE",v:disc+"% / "+goals.disc+"%",c:sc(disc)},
+                          ].map(s=>(
+                            <div key={s.l} style={{background:"#0a0f1e",borderRadius:7,padding:"7px 8px"}}>
+                              <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                              <div style={{color:s.c,fontWeight:700,fontSize:13}}>{s.v}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
           </Card>
 
-          {profitPlan&&<Card style={{borderColor:G+"33",background:"#0a160f",cursor:"pointer"}} onClick={()=>setProfExpanded(p=>!p)}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-              <div style={{fontWeight:700,fontSize:15,color:G}}>Weg zur Profitabilität</div>
-              <div style={{color:G,fontSize:12,opacity:0.8,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</div>
+          {/* BLOCK 2: MINDRISK EMPFEHLUNG */}
+          {profitPlan&&<Card style={{borderColor:G+"33",background:"#080f0a",cursor:"pointer"}} onClick={()=>setProfExpanded(p=>!p)}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontWeight:700,fontSize:15,color:G}}>🤖 MindRisk Empfehlung</div>
+              <span style={{color:G,fontSize:11,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</span>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:profExpanded?10:0}}>
-              {[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},{l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:R},{l:"BREAK-EVEN",v:profitPlan.neededWR+"%",c:Y}].map(s=>(
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:profExpanded?10:0}}>
+              {[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},
+                {l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:R},
+                {l:"BREAK-EVEN",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}
+              ].map(s=>(
                 <div key={s.l} style={{background:"#0f1117",borderRadius:8,padding:10,textAlign:"center"}}>
-                  <div style={{color:"#6b7280",fontSize:9,marginBottom:3}}>{s.l}</div>
+                  <div style={{color:"#4b5563",fontSize:9,marginBottom:3}}>{s.l}</div>
                   <div style={{color:s.c,fontWeight:800,fontSize:18}}>{s.v}</div>
                 </div>
               ))}
             </div>
-            {profExpanded&&<>
-              {profitPlan.overtradeDays>0&&<div style={{background:R+"22",border:"1px solid "+R+"44",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10}}>
-                <span>⚠️</span><div style={{color:R,fontSize:12,fontWeight:600}}>{profitPlan.overtradeDays} von {profitPlan.totalDays} Tagen: Overtrading. Dein #1 Problem.</div>
-              </div>}
-              <div style={{background:"#0f1117",borderRadius:10,padding:12}}>
-                <div style={{color:G,fontWeight:700,marginBottom:8}}>1 MNQ – Live Kalkulation:</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  {[
-                    {l:"RISIKO/TRADE",v:"$"+Math.round(kontoabstand*0.02),c:R},
-                    {l:"ZIEL/TRADE (2:1)",v:"$"+Math.round(kontoabstand*0.04),c:G},
-                    {l:"EV PRO TAG",v:(profitPlan.dailyEV>=0?"+":"")+"$"+profitPlan.dailyEV,c:profitPlan.dailyEV>=0?G:R},
-                    {l:"PROGNOSE/MONAT",v:(profitPlan.monthlyEV>=0?"+":"")+"$"+profitPlan.monthlyEV,c:profitPlan.monthlyEV>=0?G:R},
-                    {l:"ZUM ZIEL FEHLT",v:"$"+Math.max(0,goals.targetBalance-saldo).toFixed(0),c:Math.max(0,goals.targetBalance-saldo)===0?G:Y},
-                    {l:"MONATE BIS ZIEL",v:profitPlan.monthlyEV>0?Math.ceil(Math.max(0,goals.targetBalance-saldo)/profitPlan.monthlyEV)+"Mo":"∞",c:profitPlan.monthlyEV>0?G:R}
-                  ].map(s=>(
-                    <div key={s.l} style={{background:"#1a1f2e",borderRadius:8,padding:8}}>
-                      <div style={{color:"#6b7280",fontSize:9,marginBottom:2}}>{s.l}</div>
-                      <div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div>
+            {profExpanded&&(()=>{
+              const wr=profitPlan.wr/100;
+              const slT=40;const tpT=80;const slD=slT*0.5;const tpD=tpT*0.5;
+              const crv=tpT/slT;
+              const evTrade=Math.round(wr*tpD-(1-wr)*slD);
+              const evDay=evTrade*DAILY_LIMIT;
+              const today=new Date();
+              const endM=new Date(today.getFullYear(),today.getMonth()+1,0);
+              let daysLeft=0;
+              for(let dt=new Date(today);dt<=endM;dt.setDate(dt.getDate()+1)){const d=dt.getDay();if(d!==0&&d!==6)daysLeft++;}
+              const projMonth=Math.round(daysLeft*evDay);
+              const missing=Math.max(0,goals.targetBalance-saldo);
+              const monateBisZiel=evDay>0?Math.ceil(missing/(evDay*22)):null;
+              return(
+                <div>
+                  {profitPlan.overtradeDays>0&&<div style={{background:R+"22",border:"1px solid "+R+"44",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10}}>
+                    <span>⚠️</span><div style={{color:R,fontSize:12,fontWeight:600}}>{profitPlan.overtradeDays} von {profitPlan.totalDays} Tagen Overtrading. Dein #1 Problem.</div>
+                  </div>}
+                  <div style={{background:"#0f1117",borderRadius:10,padding:12,marginBottom:8}}>
+                    <div style={{color:G,fontWeight:700,fontSize:12,marginBottom:8}}>📐 Setup für 1 MNQ:</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:6}}>
+                      {[{l:"SL",v:"40 Ticks
+= $20",c:R},{l:"TP",v:"80 Ticks
+= $40",c:G},{l:"CRV",v:"2:1",c:Y}].map(s=>(
+                        <div key={s.l} style={{background:"#1a1f2e",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
+                          <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                          <div style={{color:s.c,fontWeight:800,fontSize:13,whiteSpace:"pre-line"}}>{s.v}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                      {[
+                        {l:"EV / TRADE",v:(evTrade>=0?"+":"")+"$"+evTrade,c:evTrade>=0?G:R},
+                        {l:"EV / TAG (2 Trades)",v:(evDay>=0?"+":"")+"$"+evDay,c:evDay>=0?G:R},
+                        {l:"PROGNOSE MONAT",v:(projMonth>=0?"+":"")+"$"+projMonth+" ("+daysLeft+"T)",c:projMonth>=0?G:R},
+                        {l:"MONATE BIS ZIEL",v:monateBisZiel?monateBisZiel+"Mo bei akt. Form":"∞",c:monateBisZiel&&monateBisZiel<=6?G:Y},
+                      ].map(s=>(
+                        <div key={s.l} style={{background:"#1a1f2e",borderRadius:7,padding:"7px 8px"}}>
+                          <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                          <div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{background:"#0f1117",borderRadius:8,padding:"10px 12px",border:"1px solid "+G+"22"}}>
+                    <div style={{color:G,fontSize:11,fontWeight:700,marginBottom:6}}>💡 Weg zur Profitabilität:</div>
+                    {profitPlan.wr<profitPlan.neededWR&&<div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>• Deine WR ({profitPlan.wr}%) liegt unter dem Break-Even ({profitPlan.neededWR}%). Fokus auf Setup-Qualität, nicht Quantität.</div>}
+                    {profitPlan.overtradeDays>0&&<div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>• {profitPlan.overtradeDays} Tage Overtrading = verlorene Disziplin. Max 2 Trades/Tag einhalten.</div>}
+                    <div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>• Mit 47% WR und 2:1 CRV ist positiver EV möglich. Konsequenz ist der Schlüssel.</div>
+                    <div style={{color:G,fontSize:11,fontWeight:600}}>• Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel.</div>
+                  </div>
                 </div>
-              </div>
-            </>}
+              );
+            })()}
           </Card>}
         </div>}
 
