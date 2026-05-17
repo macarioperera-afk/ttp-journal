@@ -397,13 +397,23 @@ export default function App(){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({messages:newMsgs.map(m=>({role:m.role,content:m.content})),context:ctx})
       });
-      if(!res.ok)throw new Error('API '+res.status);
-      const data=await res.json();
+      const rawText=await res.text();
+      if(!res.ok){
+        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);
+        return;
+      }
+      let data;
+      try{data=JSON.parse(rawText);}catch(e){
+        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
+        return;
+      }
+      if(!data.message){
+        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
+        return;
+      }
       setAiMessages(p=>[...p,{role:"assistant",content:data.message}]);
     }catch(err){
-      console.error('Coach API Error:',err);
-      const fallback=smartCoach(userInput,"");
-      setAiMessages(p=>[...p,{role:"assistant",content:fallback}]);
+      setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Netzwerk Fehler: "+err.message}]);
     }finally{setAiLoading(false);}
   };
 
