@@ -854,10 +854,46 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>{renderCal()}</div>
           </Card>
 
-          {/* BLOCK 1: MONATSZIEL */}
+          {/* BLOCK 1: MINDRISK EMPFEHLUNG */}
+          {profitPlan&&<Card style={{borderColor:G+"33",background:"#080f0a",cursor:"pointer"}} onClick={()=>setProfExpanded(p=>!p)}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontWeight:700,fontSize:15,color:G}}>🤖 MindRisk Empfehlung</div>
+              <span style={{color:G,fontSize:11,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:profExpanded?10:0}}>
+              {[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},
+                {l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:R},
+                {l:"BREAK-EVEN",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}
+              ].map(s=>(
+                <div key={s.l} style={{background:"#0f1117",borderRadius:8,padding:10,textAlign:"center"}}>
+                  <div style={{color:"#4b5563",fontSize:9,marginBottom:3}}>{s.l}</div>
+                  <div style={{color:s.c,fontWeight:800,fontSize:18}}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+            {profExpanded&&(()=>{
+              const wr=profitPlan.wr/100;
+              const slT=40;const tpT=80;const slD=slT*0.5;const tpD=tpT*0.5;
+              const crv=tpT/slT;
+              const evTrade=Math.round(wr*tpD-(1-wr)*slD);
+              const evDay=evTrade*DAILY_LIMIT;
+              const today=new Date();
+              const endM=new Date(today.getFullYear(),today.getMonth()+1,0);
+              let daysLeft=0;
+              for(let dt=new Date(today);dt<=endM;dt.setDate(dt.getDate()+1)){const d=dt.getDay();if(d!==0&&d!==6)daysLeft++;}
+              const projMonth=Math.round(daysLeft*evDay);
+              const missing=Math.max(0,goals.targetBalance-saldo);
+              const monateBisZiel=evDay>0?Math.ceil(missing/(evDay*22)):null;
+              return(
+                <div>
+                  {profitPlan.overtradeDays>0&&<div style={{background:R+"22",border:"1px solid "+R+"44",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10}}>
+                    <span>⚠️</span><div style={{color:R,fontSize:12,fontWeight:600}}>{profitPlan.overtradeDays} von {profitPlan.totalDays} Tagen Overtrading. Dein #1 Problem.</div>
+          
+
+          {/* BLOCK 2: MEINE ZIELE */}
           <Card style={{borderColor:B+"33",background:"#0f1523"}} onClick={()=>setMonatExp(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontWeight:700,fontSize:15,color:"#e2e8f0"}}>🎯 Monatsziel</div>
+              <div style={{fontWeight:700,fontSize:15,color:"#e2e8f0"}}>🎯 Meine Ziele</div>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"33",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️ Ziel</button>
                 <span style={{color:B,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span>
@@ -900,7 +936,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                     const maxTradesLeft=daysLeft*DAILY_LIMIT;
                     const profitPerDayNeeded=daysLeft>0?Math.ceil(missing/daysLeft):0;
                     const profitPerTradeNeeded=profitPerDayNeeded>0?Math.ceil(profitPerDayNeeded/DAILY_LIMIT):0;
-                    const slTicks=40;const tpTicks=80;const crv=2;
+                                      const slTicks=40;const tpTicks=80;const crv=2;
                     const slDollar=slTicks*0.5;const tpDollar=tpTicks*0.5;
                     const wr=t09.length?t09.filter(t=>t.pnl>0).length/t09.length:0.47;
                     const evPerTrade=Math.round(wr*tpDollar-(1-wr)*slDollar);
@@ -930,47 +966,11 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             })()}
           </Card>
 
-          {/* BLOCK 2: MINDRISK EMPFEHLUNG */}
-          {profitPlan&&<Card style={{borderColor:G+"33",background:"#080f0a",cursor:"pointer"}} onClick={()=>setProfExpanded(p=>!p)}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{fontWeight:700,fontSize:15,color:G}}>🤖 MindRisk Empfehlung</div>
-              <span style={{color:G,fontSize:11,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</span>
-            </div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:profExpanded?10:0}}>
-              {[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},
-                {l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:R},
-                {l:"BREAK-EVEN",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}
-              ].map(s=>(
-                <div key={s.l} style={{background:"#0f1117",borderRadius:8,padding:10,textAlign:"center"}}>
-                  <div style={{color:"#4b5563",fontSize:9,marginBottom:3}}>{s.l}</div>
-                  <div style={{color:s.c,fontWeight:800,fontSize:18}}>{s.v}</div>
-                </div>
-              ))}
-            </div>
-            {profExpanded&&(()=>{
-              const wr=profitPlan.wr/100;
-              const slT=40;const tpT=80;const slD=slT*0.5;const tpD=tpT*0.5;
-              const crv=tpT/slT;
-              const evTrade=Math.round(wr*tpD-(1-wr)*slD);
-              const evDay=evTrade*DAILY_LIMIT;
-              const today=new Date();
-              const endM=new Date(today.getFullYear(),today.getMonth()+1,0);
-              let daysLeft=0;
-              for(let dt=new Date(today);dt<=endM;dt.setDate(dt.getDate()+1)){const d=dt.getDay();if(d!==0&&d!==6)daysLeft++;}
-              const projMonth=Math.round(daysLeft*evDay);
-              const missing=Math.max(0,goals.targetBalance-saldo);
-              const monateBisZiel=evDay>0?Math.ceil(missing/(evDay*22)):null;
-              return(
-                <div>
-                  {profitPlan.overtradeDays>0&&<div style={{background:R+"22",border:"1px solid "+R+"44",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10}}>
-                    <span>⚠️</span><div style={{color:R,fontSize:12,fontWeight:600}}>{profitPlan.overtradeDays} von {profitPlan.totalDays} Tagen Overtrading. Dein #1 Problem.</div>
-                  </div>}
+        </div>}
                   <div style={{background:"#0f1117",borderRadius:10,padding:12,marginBottom:8}}>
                     <div style={{color:G,fontWeight:700,fontSize:12,marginBottom:8}}>📐 Setup für 1 MNQ:</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:6}}>
-                      {[{l:"SL",v:"40 Ticks
-= $20",c:R},{l:"TP",v:"80 Ticks
-= $40",c:G},{l:"CRV",v:"2:1",c:Y}].map(s=>(
+                      {[{l:"SL",v:"40T = $20",c:R},{l:"TP",v:"80T = $40",c:G},{l:"CRV",v:"2:1",c:Y}].map(s=>(
                         <div key={s.l} style={{background:"#1a1f2e",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
                           <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:800,fontSize:13,whiteSpace:"pre-line"}}>{s.v}</div>
