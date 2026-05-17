@@ -440,14 +440,8 @@ Sei direkt und ehrlich. Erkenne Muster wenn du sie siehst. Max 4 Sätze.`;
     }
     else if(type==="overtrading"){
       const tod3=t09.filter(t=>t.date===todayISO());
-      prompt=`NOTFALL: Jeronimo hat gerade seinen ${tod3.length}. Trade gemacht (Limit: ${DAILY_LIMIT}).
-
-Heutige Trades:
-${tod3.map(t=>`• ${t.time} ${t.contract} ${t.pnl>=0?"+":""}$${t.pnl.toFixed(0)}`).join("
-")}
-Heutige P&L: ${todPnl>=0?"+":""}$${todPnl.toFixed(0)}
-
-Gib eine KLARE STOPP-Nachricht. Kurz, direkt, keine Ausreden akzeptieren. Max 3 Sätze.`;
+      const todTradesStr=tod3.map(t=>"• "+t.time+" "+t.contract+" "+(t.pnl>=0?"+":"")+"$"+t.pnl.toFixed(0)).join("\n");
+      prompt="NOTFALL: Jeronimo hat gerade seinen "+tod3.length+". Trade gemacht (Limit: "+DAILY_LIMIT+").\n\nHeutige Trades:\n"+todTradesStr+"\nHeutige P&L: "+(todPnl>=0?"+":"")+"$"+todPnl.toFixed(0)+"\n\nGib eine KLARE STOPP-Nachricht. Kurz, direkt, keine Ausreden akzeptieren. Max 3 Sätze.";
     }
     else if(type==="trading_window"){
       prompt=`Das Trading-Fenster (16:15-17:30) ist gerade geöffnet.
@@ -473,7 +467,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         missingToTarget:Math.max(0,goals.targetBalance-saldo),
         avgWin:wins_t.length?Math.round(wins_t.reduce((s,t)=>s+t.pnl,0)/wins_t.length):0,
         avgLoss:losses_t.length?Math.round(losses_t.reduce((s,t)=>s+t.pnl,0)/losses_t.length):0,
-        allTrades:t09.map(t=>`${t.date} ${t.time} ${t.contract} ${t.dir} ${t.pnl>=0?"+":""}${t.pnl.toFixed(0)}`).join("\n"),
+        allTrades:t09.map(t=>t.date+" "+t.time+" "+t.contract+" "+t.dir+" "+(t.pnl>=0?"+":"")+"$"+t.pnl.toFixed(0)).join("\n"),
         todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time})),
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,10).map(m=>m.date+': '+m.note).join('\n')};
