@@ -159,6 +159,7 @@ export default function App(){
   const[aiOpen,setAiOpen]=useState(false);
   const[aiMessages,setAiMessages]=useState([]);
   const[aiInput,setAiInput]=useState("");
+  const aiMessagesEndRef=useRef(null);
   const[pendingImage,setPendingImage]=useState(null);
   const[aiLoading,setAiLoading]=useState(false);
   const[aiImage,setAiImage]=useState(null);
@@ -209,6 +210,12 @@ export default function App(){
   const[tick,setTick]=useState(0);
 
   useEffect(()=>{const id=setInterval(()=>setTick(t=>t+1),1000);return()=>clearInterval(id);},[]);
+
+  useEffect(()=>{
+    if(aiMessagesEndRef.current){
+      aiMessagesEndRef.current.scrollIntoView({behavior:"smooth"});
+    }
+  },[aiMessages,aiLoading]);
 
   useEffect(()=>{
     const t=setTimeout(()=>setShowSplash(false),1800);
@@ -1237,7 +1244,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           </button>
         )}
         {aiOpen&&(
-          <div style={{width:320,maxWidth:"calc(100vw - 32px)",background:"#1a1f2e",border:"1px solid #6366f1",borderRadius:16,boxShadow:"0 8px 32px rgba(99,102,241,0.3)",display:"flex",flexDirection:"column",maxHeight:440}}>
+          <div style={{width:320,maxWidth:"calc(100vw - 32px)",background:"#1a1f2e",border:"1px solid #6366f1",borderRadius:16,boxShadow:"0 8px 32px rgba(99,102,241,0.3)",display:"flex",flexDirection:"column",maxHeight:"70vh"}}>
             <div style={{padding:"12px 16px",borderBottom:"1px solid #2d3548",display:"flex",justifyContent:"space-between",alignItems:"center",background:"linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.1))",borderRadius:"16px 16px 0 0"}}>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
                 <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",animation:"orb 3s ease infinite",flexShrink:0}}>
@@ -1272,6 +1279,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                   <div style={{width:7,height:7,borderRadius:"50%",background:B,animation:"pulse 1s infinite 0.4s"}}/>
                 </div>
               )}
+              <div ref={aiMessagesEndRef}/>
             </div>
             <div style={{padding:"6px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:6,flexWrap:"wrap"}}>
               {["Soll ich traden?","Analysiere meine Schwächen","Beste Handelszeit?","Diese Woche?"].map(q=>(
@@ -1305,10 +1313,11 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                   <line x1="8" y1="23" x2="16" y2="23"/>
                 </svg>
               </button>
-              <input value={aiInput} onChange={e=>setAiInput(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendAiMessage()}
+              <textarea value={aiInput} onChange={e=>setAiInput(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendAiMessage())}
                 placeholder={isRecording?"🎤 Höre zu...":"Frag deinen Coach..."}
-                style={{flex:1,fontSize:12,padding:"8px 10px",borderRadius:20,background:"#0f1117",border:"1px solid #2d3548"}}/>
+                rows={2}
+                style={{flex:1,fontSize:13,padding:"10px 14px",borderRadius:16,background:"#0f1117",border:"1px solid #2d3548",resize:"none",lineHeight:1.4,maxHeight:80,overflowY:"auto",color:"#e2e8f0",fontFamily:"inherit"}}/>
               <button id="aiSendBtn" onClick={sendAiMessage} disabled={aiLoading||(!aiInput.trim()&&!aiImage)}
                 style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"8px 12px",borderRadius:20,fontSize:14,fontWeight:700,opacity:aiLoading||(!aiInput.trim()&&!aiImage)?0.4:1,flexShrink:0}}>→</button>
             </div>
