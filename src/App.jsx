@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
 const G="#00d395",R="#ef4444",B="#6366f1",Y="#f59e0b",P="#a855f7",O="#f97316";
-const pc=v=>v>0?G:v<0?R:"#6b7280";
+const pc=v=>v>0?G:v<0?R:"#8b96b0";
 const fd=v=>(v>=0?"+":"-")+"$"+Math.abs(v).toFixed(2);
 const fs=v=>(v>=0?"+":"-")+"$"+Math.abs(v).toFixed(0);
 const todayISO=()=>new Date().toISOString().split("T")[0];
@@ -111,16 +111,16 @@ const Pill=({bg,color,children})=>(
   <span style={{display:"inline-block",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:bg,color}}>{children}</span>
 );
 const Card=({children,style,onClick})=>(
-  <div onClick={onClick} style={{background:"#1a1f2e",border:"1px solid #2d3548",borderRadius:12,padding:16,overflow:"hidden",...style}}>{children}</div>
+  <div onClick={onClick} style={{background:"linear-gradient(145deg,#141e35 0%,#0f1828 100%)",border:"1px solid rgba(99,102,241,0.18)",borderRadius:14,padding:16,overflow:"hidden",boxShadow:"0 4px 24px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.05)",...style}}>{children}</div>
 );
 const Bar2=({pct,color})=>(
-  <div style={{height:8,borderRadius:4,background:"#2d3548"}}>
-    <div style={{height:"100%",borderRadius:4,width:Math.min(100,Math.max(0,pct))+"%",background:color,transition:"width .4s"}}/>
+  <div style={{height:10,borderRadius:5,background:"rgba(255,255,255,0.05)",boxShadow:"inset 0 2px 4px rgba(0,0,0,0.4)"}}>
+    <div style={{height:"100%",borderRadius:5,width:Math.min(100,Math.max(0,pct))+"%",background:"linear-gradient(90deg,"+color+"aa,"+color+")",transition:"width .6s ease",boxShadow:"0 0 10px "+color+"55"}}/>
   </div>
 );
 const Chk=({checked,onClick,label})=>(
   <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"1px solid #2d3548",cursor:"pointer"}}>
-    <div style={{width:22,height:22,borderRadius:6,border:"2px solid "+(checked?G:"#2d3548"),background:checked?G:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+    <div style={{width:22,height:22,borderRadius:6,border:"2px solid "+(checked?G:"#1e2d48"),background:checked?G:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
       {checked&&<span style={{color:"#000",fontSize:14,fontWeight:900}}>✓</span>}
     </div>
     <span style={{fontSize:14}}>{label}</span>
@@ -128,8 +128,8 @@ const Chk=({checked,onClick,label})=>(
 );
 
 const Field=({label,children})=>(
-  <div style={{background:"#0f1117",borderRadius:10,padding:"10px 12px",border:"1px solid #2d3548"}}>
-    <div style={{color:"#6b7280",fontSize:9,fontWeight:700,letterSpacing:"0.8px",marginBottom:6}}>{label}</div>
+  <div style={{background:"#0d1320",borderRadius:10,padding:"10px 12px",border:"1px solid #2d3548"}}>
+    <div style={{color:"#8b96b0",fontSize:9,fontWeight:700,letterSpacing:"0.8px",marginBottom:6}}>{label}</div>
     {children}
   </div>
 );
@@ -190,6 +190,11 @@ export default function App(){
   const saveSettings=(s)=>{setSettings(s);localStorage.setItem('ttp_settings',JSON.stringify(s));};
   const[profExpanded,setProfExpanded]=useState(false);
   const[monatExp,setMonatExp]=useState(false);
+  const[probExp,setProbExp]=useState(false);
+  const[problems,setProblems]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_problems')||'{}');}catch{return{};}});
+  const[probAnalysis,setProbAnalysis]=useState('');
+  const[probLoading,setProbAnalysisLoading]=useState(false);
+  const saveProblems=(p)=>{setProblems(p);localStorage.setItem('ttp_problems',JSON.stringify(p));};
   const[coachProfile,setCoachProfile]=useState(()=>{
     try{return localStorage.getItem('ttp_coach_profile')||'';}catch(e){return'';}
   });
@@ -570,7 +575,20 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
     reader.readAsDataURL(file);
   };
 
-  const sendAiMessage=async()=>{
+  const analyzeProblems=async()=>{
+  const selected=Object.keys(problems).filter(k=>problems[k]);
+  if(!selected.length){alert("Bitte mindestens ein Problem auswählen!");return;}
+  setProbAnalysisLoading(true);
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:"Analysiere meine Trading-Probleme: "+selected.join(", ")+". Meine aktuellen Stats: WR "+Math.round(t09.filter(t=>t.pnl>0).length/(t09.length||1)*100)+"%, "+profitPlan?.overtradeDays+" Overtrading-Tage, Regelquote "+disc+"%. Gib mir einen konkreten 3-Schritte Plan für jedes Problem.",trades:t09.slice(-20),coachProfile,coachMemory,goals})});
+    const d=await r.json();
+    setProbAnalysis(d.content?.map(c=>c.text||'').join(''));
+  }catch(e){setProbAnalysis("Fehler: "+e.message);}
+  setProbAnalysisLoading(false);
+};
+
+const sendAiMessage=async()=>{
     if((!aiInput.trim()&&!aiImage)||aiLoading)return;
     // "Merke dir..." Befehl → direkt ins Gedächtnis
     const inputLow=(aiInput||"").toLowerCase();
@@ -647,7 +665,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       let data;
       try{data=JSON.parse(rawText);}catch(e){
         setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
-                return;
+        return;
       }
       if(!data.message){
         setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
@@ -677,7 +695,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
   };
 
   const renderCal=()=>{
-    const y=now.getFullYear(),mo=now.getMonth();
+        const y=now.getFullYear(),mo=now.getMonth();
     const fd2=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate();
     const cells=[];
     for(let i=0;i<(fd2||7)-1;i++)cells.push(<div key={"e"+i}/>);
@@ -685,12 +703,12 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       const k=`${y}-${String(mo+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
       const pv=calMap[k],isT=k===todayISO(),isFuture=k>todayISO();
       const isBlocked=blockedDays.has(k)&&isFuture;
-      let bg="#1a1f2e",border=isT?B:"#2d3548";
+      let bg="#131d30",border=isT?B:"#1e2d48";
       if(isBlocked){bg=R+"11";border=R+"44";}
       else if(pv!=null){bg=pv>0?G+"22":R+"22";border=pv>0?G+"55":R+"55";}
       cells.push(
         <div key={k} style={{background:bg,border:"2px solid "+border,borderRadius:isDesktop?10:7,padding:isDesktop?"10px 4px":"5px 2px",textAlign:"center",minHeight:isDesktop?64:42}}>
-          <div style={{color:isT?B:"#6b7280",fontSize:isDesktop?14:11,fontWeight:isT?700:400}}>{d}</div>
+          <div style={{color:isT?B:"#8b96b0",fontSize:isDesktop?14:11,fontWeight:isT?700:400}}>{d}</div>
           {isBlocked&&<div style={{fontSize:8,color:R,fontWeight:700}}>SPERRE</div>}
           {pv!=null&&!isBlocked&&<div style={{color:pc(pv),fontSize:isDesktop?12:10,fontWeight:700}}>{pv>=0?"+":"-"}${Math.abs(pv).toFixed(0)}</div>}
         </div>
@@ -716,10 +734,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 ];
 
   return(
-    <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:isDesktop?15:14,paddingBottom:isDesktop?"80px":"calc(80px + env(safe-area-inset-bottom,0px))",width:"100%",overflowX:"hidden"}}>
+    <div style={{background:"#0d1320",minHeight:"100vh",color:"#f0f4ff",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:isDesktop?15:14,paddingBottom:isDesktop?"80px":"calc(80px + env(safe-area-inset-bottom,0px))",width:"100%",overflowX:"hidden"}}>
       {showSplash&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"radial-gradient(circle at center,#1a1f2e 0%,#0f1117 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",animation:"fadeOut 0.4s ease 1.4s forwards"}}>
-        <div style={{fontSize:42,fontWeight:900,letterSpacing:"-2px",marginBottom:8}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
-        <div style={{fontSize:11,color:"#6b7280",letterSpacing:"3px",marginBottom:32}}>TRADING JOURNAL</div>
+        <div style={{fontSize:42,fontWeight:900,letterSpacing:"-2px",marginBottom:8}}><span style={{color:B}}>Mind</span><span style={{color:"#f0f4ff"}}>Risk</span></div>
+        <div style={{fontSize:11,color:"#8b96b0",letterSpacing:"3px",marginBottom:32}}>TRADING JOURNAL</div>
         <div style={{width:48,height:48,borderRadius:"50%",border:"3px solid #2d3548",borderTopColor:B,animation:"spin 0.8s linear infinite"}}/>
       </div>}
 
@@ -775,11 +793,11 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       </div>}
 
       {/* HEADER */}
-      <div style={{background:"linear-gradient(180deg,#1a1f2e 0%,#161b27 100%)",borderBottom:"1px solid #2d3548",padding:isDesktop?"16px 32px 14px":"14px 18px 12px",width:"100%",boxSizing:"border-box"}}>
+      <div style={{background:"linear-gradient(180deg,#0f1830 0%,#0b1422 100%)",borderBottom:"1px solid #2d3548",padding:isDesktop?"16px 32px 14px":"14px 18px 12px",width:"100%",boxSizing:"border-box"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{flex:1}}>
-            <div style={{fontWeight:900,fontSize:30,letterSpacing:"-1.5px",lineHeight:1}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
-            <div style={{color:"#e2e8f0",fontSize:12,fontWeight:700,marginTop:3}}>Jeronimo <span style={{color:"#4b5563",fontSize:10,fontWeight:400}}>· Konto 09 · P1-235109</span></div>
+            <div style={{fontWeight:900,fontSize:30,letterSpacing:"-1.5px",lineHeight:1}}><span style={{color:B}}>Mind</span><span style={{color:"#f0f4ff"}}>Risk</span></div>
+            <div style={{color:"#f0f4ff",fontSize:12,fontWeight:700,marginTop:3}}>Jeronimo <span style={{color:"#6b7a9a",fontSize:10,fontWeight:400}}>· Konto 09 · P1-235109</span></div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{fontSize:10}}>
@@ -792,19 +810,19 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 return(
                   <div style={{display:"flex",flexDirection:"column",gap:isDesktop?6:3,alignItems:"flex-end"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <span style={{color:"#4b5563",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"London":"LON"}</span>
-                      <span style={{color:lonOpen?G:"#4b5563",fontWeight:700,fontSize:isDesktop?13:10}}>{lonTime}</span>
-                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:lonOpen?G:"#374151",boxShadow:lonOpen?"0 0 6px "+G:"none"}}/>
+                      <span style={{color:"#6b7a9a",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"London":"LON"}</span>
+                      <span style={{color:lonOpen?G:"#6b7a9a",fontWeight:700,fontSize:isDesktop?13:10}}>{lonTime}</span>
+                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:lonOpen?G:"#4a5568",boxShadow:lonOpen?"0 0 6px "+G:"none"}}/>
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <span style={{color:"#4b5563",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"Chicago":"CHI"}</span>
-                      <span style={{color:myWindow?G:chiOpen?Y:"#4b5563",fontWeight:700,fontSize:isDesktop?13:10}}>{chiTime}</span>
-                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:myWindow?G:chiOpen?Y:"#374151",boxShadow:myWindow?"0 0 6px "+G:chiOpen?"0 0 6px "+Y:"none"}}/>
+                      <span style={{color:"#6b7a9a",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"Chicago":"CHI"}</span>
+                      <span style={{color:myWindow?G:chiOpen?Y:"#6b7a9a",fontWeight:700,fontSize:isDesktop?13:10}}>{chiTime}</span>
+                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:myWindow?G:chiOpen?Y:"#4a5568",boxShadow:myWindow?"0 0 6px "+G:chiOpen?"0 0 6px "+Y:"none"}}/>
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <span style={{color:"#4b5563",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"Tokyo":"TYO"}</span>
-                      <span style={{color:tokyoOpen?G:"#4b5563",fontWeight:700,fontSize:isDesktop?13:10}}>{tokyoTime}</span>
-                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:tokyoOpen?G:"#374151",boxShadow:tokyoOpen?"0 0 6px "+G:"none"}}/>
+                      <span style={{color:"#6b7a9a",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"Tokyo":"TYO"}</span>
+                      <span style={{color:tokyoOpen?G:"#6b7a9a",fontWeight:700,fontSize:isDesktop?13:10}}>{tokyoTime}</span>
+                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:tokyoOpen?G:"#4a5568",boxShadow:tokyoOpen?"0 0 6px "+G:"none"}}/>
                     </div>
                   </div>
                 );
@@ -859,48 +877,48 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           <Card style={{borderColor:B+"44"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
               <div>
-                <div style={{color:"#6b7280",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div>
+                <div style={{color:"#8b96b0",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div>
                 <div style={{color:pc(netPnl),fontWeight:800,fontSize:isDesktop?38:26}}>{netPnl>=0?"+":"-"}${Math.round(Math.abs(netPnl)).toLocaleString()}</div>
-                <div style={{color:"#6b7280",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div>
+                <div style={{color:"#8b96b0",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div>
               </div>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"8px 12px",textAlign:"right"}}>
-                <div style={{color:"#6b7280",fontSize:9,marginBottom:1}}>HEUTE</div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"8px 12px",textAlign:"right"}}>
+                <div style={{color:"#8b96b0",fontSize:9,marginBottom:1}}>HEUTE</div>
                 <div style={{color:pc(todPnl),fontWeight:800,fontSize:16}}>{fs(todPnl)}</div>
-                <div style={{color:"#6b7280",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div>
+                <div style={{color:"#8b96b0",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div>
               </div>
             </div>
             <div style={{marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#6b7280",fontSize:10}}>Max DD Abstand</span>
+                <span style={{color:"#8b96b0",fontSize:10}}>Max DD Abstand</span>
                 <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${Math.round(kontoabstand).toLocaleString()} ({Math.round(kontoabstand/BUFFER*100)}%)</span>
               </div>
               <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
             </div>
             <div style={{marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#6b7280",fontSize:10}}>Disziplin</span>
+                <span style={{color:"#8b96b0",fontSize:10}}>Disziplin</span>
                 <span style={{color:sc(disc),fontWeight:700}}>{disc}% / {goals.disc}% Ziel</span>
               </div>
               <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
             </div>
             <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>MONAT P&L</div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
+                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>MONAT P&L</div>
                 <div style={{color:pc(monthPnl),fontWeight:800,fontSize:14}}>{fs(monthPnl)}</div>
-                <div style={{color:"#374151",fontSize:8}}>diesen Monat</div>
+                <div style={{color:"#4a5568",fontSize:8}}>diesen Monat</div>
               </div>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>WIN RATE</div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
+                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>WIN RATE</div>
                 <div style={{color:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R,fontWeight:800,fontSize:14}}>{t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0}%</div>
-                <div style={{color:"#374151",fontSize:8}}>{t09.length} Trades</div>
+                <div style={{color:"#4a5568",fontSize:8}}>{t09.length} Trades</div>
               </div>
             </div>
             <div style={{paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <Field label="SALDO ($)">
-                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
               </Field>
               <Field label="MAX DD ($)">
-                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
               </Field>
             </div>
           </Card>
@@ -910,7 +928,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           <Card style={{breakInside:"avoid",height:isDesktop?"auto":"auto"}}>
             <div style={{fontWeight:isDesktop?800:700,marginBottom:isDesktop?14:10,fontSize:isDesktop?18:15}}>{now.toLocaleString("de-DE",{month:"long",year:"numeric"})}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>
-              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#6b7280",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}
+              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#8b96b0",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isDesktop?6:3}}>{renderCal()}</div>
           </Card>
@@ -919,8 +937,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             <div style={{flex:1,display:"flex",flexDirection:"column",gap:16}}>
 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {[{l:"TRADES",v:tradeCount+"/"+DAILY_LIMIT,c:tradesLeft>0?G:R},{l:"MONAT P&L",v:fs(monthPnl),c:pc(monthPnl)},{l:"WIN RATE",v:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)+"%",c:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R},{l:"DD ABSTAND",v:"$"+Math.round(kontoabstand),c:kontoabstand<1000?Y:G}].map(s=>(
-              <div key={s.l} style={{background:"#1a1f2e",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}>
-                <div style={{color:"#6b7280",fontSize:9,marginBottom:3}}>{s.l}</div>
+              <div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}>
+                <div style={{color:"#8b96b0",fontSize:9,marginBottom:3}}>{s.l}</div>
                 <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
               </div>
             ))}
@@ -933,23 +951,23 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:4,height:4,borderRadius:"50%",background:"#6366f1",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDots 2.5s ease-in-out infinite",boxShadow:"0 0 4px rgba(99,102,241,0.8)"}}/>
                 <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#e2e8f0"}}>Weg zur Profitabilität</div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Weg zur Profitabilität</div>
                   <div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div>
                 </div>
               </div>
               
             </div>
             {!profExpanded&&!isDesktop&&profitPlan&&<div style={{display:"flex",gap:8,marginBottom:2}}>
-              <div style={{background:"#0a0b16",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#4b5563",fontSize:8}}>EV / TAG</div>
+              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
+                <div style={{color:"#6b7a9a",fontSize:8}}>EV / TAG</div>
                 <div style={{color:profitPlan.dailyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.dailyEV>=0?"+":""}${profitPlan.dailyEV}</div>
               </div>
-              <div style={{background:"#0a0b16",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#4b5563",fontSize:8}}>PROGNOSE MONAT</div>
+              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
+                <div style={{color:"#6b7a9a",fontSize:8}}>PROGNOSE MONAT</div>
                 <div style={{color:profitPlan.monthlyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.monthlyEV>=0?"+":""}${profitPlan.monthlyEV}</div>
               </div>
-              <div style={{background:"#0a0b16",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#4b5563",fontSize:8}}>OVERTRADING</div>
+              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
+                <div style={{color:"#6b7a9a",fontSize:8}}>OVERTRADING</div>
                 <div style={{color:profitPlan.overtradeDays>3?R:G,fontWeight:800,fontSize:13}}>{profitPlan.overtradeDays} Tage</div>
               </div>
             </div>}
@@ -958,8 +976,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 {l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:Y},
                 {l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}
               ].map(s=>(
-                <div key={s.l} style={{background:"#0a0b16",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}>
-                  <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                <div key={s.l} style={{background:"#0d1420",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}>
+                  <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
                   <div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div>
                 </div>
               ))}
@@ -980,12 +998,12 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                     <span style={{fontSize:14}}>⚠️</span>
                     <div style={{color:"#fca5a5",fontSize:11,fontWeight:600}}>{profitPlan.overtradeDays}/{profitPlan.totalDays} Tage Overtrading – Dein #1 Problem</div>
                   </div>}
-                  <div style={{background:"#0a0b16",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}>
+                  <div style={{background:"#0d1420",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}>
                     <div style={{color:"#6366f1",fontWeight:700,fontSize:11,marginBottom:8,letterSpacing:"0.5px"}}>SETUP 1 MNQ</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
                       {[{l:"STOP LOSS",v:"40 Ticks",s:"$20",c:R},{l:"TAKE PROFIT",v:"80 Ticks",s:"$40",c:G},{l:"CRV",v:"2:1",s:"Risk/Reward",c:Y}].map(s=>(
-                        <div key={s.l} style={{background:"#13141f",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
-                          <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>{s.l}</div>
+                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
+                          <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
                           <div style={{color:s.c,fontSize:9,opacity:0.7}}>{s.s}</div>
                         </div>
@@ -999,10 +1017,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                         {l:"MONATE BIS ZIEL",v:monateBis?monateBis+"Mo":"∞",c:monateBis&&monateBis<=6?G:Y,s:"bei akt. Performance"},
                         {l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"},
                       ].map(s=>(
-                        <div key={s.l} style={{background:"#13141f",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}>
-                          <div style={{color:"#4b5563",fontSize:9}}>{s.l}</div>
+                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}>
+                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:800,fontSize:15}}>{s.v}</div>
-                          <div style={{color:"#6b7280",fontSize:9}}>{s.s}</div>
+                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
                         </div>
                       ))}
                     </div>
@@ -1034,7 +1052,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
                 <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#e2e8f0"}}>Mein Monatsziel</div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Mein Monatsziel</div>
                   <div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div>
                 </div>
               </div>
@@ -1056,22 +1074,22 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               return(
                 <div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                    {[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#e2e8f0"},
+                    {[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#f0f4ff"},
                       {l:"ZIEL",v:"$"+goals.targetBalance.toLocaleString("de-DE"),c:P},
                       {l:"NOCH FEHLT",v:missing<=0?"✅":"+$"+Math.round(missing).toLocaleString("de-DE"),c:missing<=0?G:R}
                     ].map(s=>(
-                      <div key={s.l} style={{background:"#0a0712",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}>
-                        <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                      <div key={s.l} style={{background:"#0f1428",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}>
+                        <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
                         <div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div>
                       </div>
                     ))}
                   </div>
                   <div style={{marginBottom:6}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                      <span style={{color:"#6b7280",fontSize:10}}>Monatsfortschritt</span>
+                      <span style={{color:"#8b96b0",fontSize:10}}>Monatsfortschritt</span>
                       <span style={{color:monthPct>=100?G:P,fontWeight:700,fontSize:10}}>{monthPct}% ({monthPnl>=0?"+":""}${Math.round(monthPnl)} von ${monthNeeded} nötig)</span>
                     </div>
-                    <div style={{height:6,borderRadius:3,background:"#1e1428",overflow:"hidden"}}>
+                    <div style={{height:6,borderRadius:3,background:"#1e2540",overflow:"hidden"}}>
                       <div style={{height:"100%",borderRadius:3,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
                     </div>
                   </div>
@@ -1081,14 +1099,14 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                         {l:"HANDELSTAGE NOCH",v:dLeft2+" Tage",c:dLeft2>5?G:dLeft2>2?Y:R,s:"diesen Monat"},
                         {l:"GEWINN/TAG NÖTIG",v:missing<=0?"✅ Erreicht":"$"+dailyNeed,c:missing<=0?G:dailyNeed<100?G:Y,s:"um Ziel zu erreichen"},
                         {l:"GEWINN/TRADE NÖTIG",v:missing<=0?"✅":"$"+tradeNeed,c:missing<=0?G:tradeNeed<50?G:Y,s:"bei 2 Trades/Tag"},
-                        {l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#e2e8f0",s:dLeft2+" Tage × "+DAILY_LIMIT},
+                        {l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#f0f4ff",s:dLeft2+" Tage × "+DAILY_LIMIT},
                         {l:"DIESEN MONAT P&L",v:(monthPnl>=0?"+":"")+"$"+monthPnl,c:pc(monthPnl),s:"seit Monatsstart"},
                         {l:"REGELQUOTE",v:disc+"%",c:sc(disc),s:"Ziel: "+goals.disc+"%"},
                       ].map(s=>(
-                        <div key={s.l} style={{background:"#0a0712",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}>
-                          <div style={{color:"#4b5563",fontSize:9}}>{s.l}</div>
+                        <div key={s.l} style={{background:"#0f1428",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}>
+                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div>
-                          <div style={{color:"#6b7280",fontSize:9}}>{s.s}</div>
+                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
                         </div>
                       ))}
                     </div>
@@ -1104,6 +1122,70 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 </div>
               );
             })()}
+
+
+          {/* TRADING PROBLEME CARD */}
+          <Card style={{borderColor:"rgba(245,158,11,0.2)",background:"linear-gradient(145deg,#1a1508 0%,#0f1010 100%)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,cursor:"pointer"}} onClick={()=>setProbExp(p=>!p)}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle,#fcd34d,#f59e0b 60%,#92400e)",animation:"livingOrb 2s ease-in-out infinite",boxShadow:"0 0 10px rgba(245,158,11,0.6)",flexShrink:0}}/>
+                <div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Meine Trading-Probleme</div>
+                  <div style={{color:"#f59e0b",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KI-DIAGNOSE</div>
+                </div>
+              </div>
+              <span style={{color:"#f59e0b",fontSize:11,fontWeight:600}}>{probExp?"▲":"▼"}</span>
+            </div>
+            {(()=>{
+              const PROBS=[
+                {k:"overtrading",l:"Overtrading",d:"Zu viele Trades pro Tag"},
+                {k:"fomo",l:"FOMO",d:"Fear of Missing Out"},
+                {k:"revenge",l:"Revenge Trading",d:"Nach Verlust sofort wieder einsteigen"},
+                {k:"early_exit",l:"Zu früh aussteigen",d:"TP nicht abwarten"},
+                {k:"no_sl",l:"SL nicht einhalten",d:"Stop Loss verschoben oder ignoriert"},
+                {k:"outside_window",l:"Falsche Zeiten",d:"Außerhalb des Zeitfensters traden"},
+                {k:"impulse",l:"Impuls-Trading",d:"Kein Setup, einfach rein"},
+                {k:"fear",l:"Angst vor Verlusten",d:"Zögern bei guten Setups"},
+              ];
+              const selected=Object.keys(problems).filter(k=>problems[k]);
+              return(
+                <div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                    {PROBS.map(p=>(
+                      <button key={p.k} onClick={()=>saveProblems({...problems,[p.k]:!problems[p.k]})}
+                        title={p.d}
+                        style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,
+                          background:problems[p.k]?"rgba(245,158,11,0.25)":"rgba(255,255,255,0.04)",
+                          border:"1px solid "+(problems[p.k]?"rgba(245,158,11,0.6)":"rgba(255,255,255,0.1)"),
+                          color:problems[p.k]?"#fcd34d":"#6b7a9a",
+                          transition:"all .2s"}}>
+                        {problems[p.k]?"✓ ":""}{p.l}
+                      </button>
+                    ))}
+                  </div>
+                  {selected.length>0&&(
+                    <button onClick={analyzeProblems} disabled={probLoading}
+                      style={{width:"100%",padding:"10px",borderRadius:10,fontWeight:700,fontSize:13,
+                        background:"linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.1))",
+                        border:"1px solid rgba(245,158,11,0.3)",color:probLoading?"#6b7280":"#fcd34d",marginBottom:8}}>
+                      {probLoading?"🤖 Analysiere...":"🤖 KI-Diagnose starten ("+selected.length+" Probleme)"}
+                    </button>
+                  )}
+                  {probExp&&probAnalysis&&(
+                    <div style={{background:"rgba(245,158,11,0.06)",borderRadius:10,padding:12,border:"1px solid rgba(245,158,11,0.15)"}}>
+                      <div style={{color:"#f59e0b",fontSize:11,fontWeight:700,marginBottom:6}}>🎯 Dein persönlicher Plan:</div>
+                      <div style={{color:"#a8b8d0",fontSize:11,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{probAnalysis}</div>
+                    </div>
+                  )}
+                  {!probAnalysis&&selected.length===0&&(
+                    <div style={{color:"#4a5568",fontSize:11,textAlign:"center",padding:"4px 0"}}>
+                      Wähle deine Probleme → KI gibt dir einen konkreten Plan
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </Card>
           </Card>
             </div>
           </div>
@@ -1134,48 +1216,48 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           <Card style={{borderColor:B+"44"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
               <div>
-                <div style={{color:"#6b7280",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div>
+                <div style={{color:"#8b96b0",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div>
                 <div style={{color:pc(netPnl),fontWeight:800,fontSize:isDesktop?38:26}}>{netPnl>=0?"+":"-"}${Math.round(Math.abs(netPnl)).toLocaleString()}</div>
-                <div style={{color:"#6b7280",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div>
+                <div style={{color:"#8b96b0",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div>
               </div>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"8px 12px",textAlign:"right"}}>
-                <div style={{color:"#6b7280",fontSize:9,marginBottom:1}}>HEUTE</div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"8px 12px",textAlign:"right"}}>
+                <div style={{color:"#8b96b0",fontSize:9,marginBottom:1}}>HEUTE</div>
                 <div style={{color:pc(todPnl),fontWeight:800,fontSize:16}}>{fs(todPnl)}</div>
-                <div style={{color:"#6b7280",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div>
+                <div style={{color:"#8b96b0",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div>
               </div>
             </div>
             <div style={{marginBottom:6}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#6b7280",fontSize:10}}>Max DD Abstand</span>
+                <span style={{color:"#8b96b0",fontSize:10}}>Max DD Abstand</span>
                 <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${Math.round(kontoabstand).toLocaleString()} ({Math.round(kontoabstand/BUFFER*100)}%)</span>
               </div>
               <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
             </div>
             <div style={{marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#6b7280",fontSize:10}}>Disziplin</span>
+                <span style={{color:"#8b96b0",fontSize:10}}>Disziplin</span>
                 <span style={{color:sc(disc),fontWeight:700}}>{disc}% / {goals.disc}% Ziel</span>
               </div>
               <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
             </div>
             <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>MONAT P&L</div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
+                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>MONAT P&L</div>
                 <div style={{color:pc(monthPnl),fontWeight:800,fontSize:14}}>{fs(monthPnl)}</div>
-                <div style={{color:"#374151",fontSize:8}}>diesen Monat</div>
+                <div style={{color:"#4a5568",fontSize:8}}>diesen Monat</div>
               </div>
-              <div style={{background:"#0f1117",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>WIN RATE</div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
+                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>WIN RATE</div>
                 <div style={{color:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R,fontWeight:800,fontSize:14}}>{t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0}%</div>
-                <div style={{color:"#374151",fontSize:8}}>{t09.length} Trades</div>
+                <div style={{color:"#4a5568",fontSize:8}}>{t09.length} Trades</div>
               </div>
             </div>
             <div style={{paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <Field label="SALDO ($)">
-                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
               </Field>
               <Field label="MAX DD ($)">
-                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
               </Field>
             </div>
           </Card>
@@ -1183,8 +1265,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           
 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {[{l:"TRADES",v:tradeCount+"/"+DAILY_LIMIT,c:tradesLeft>0?G:R},{l:"MONAT P&L",v:fs(monthPnl),c:pc(monthPnl)},{l:"WIN RATE",v:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)+"%",c:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R},{l:"DD ABSTAND",v:"$"+Math.round(kontoabstand),c:kontoabstand<1000?Y:G}].map(s=>(
-              <div key={s.l} style={{background:"#1a1f2e",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}>
-                <div style={{color:"#6b7280",fontSize:9,marginBottom:3}}>{s.l}</div>
+              <div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}>
+                <div style={{color:"#8b96b0",fontSize:9,marginBottom:3}}>{s.l}</div>
                 <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
               </div>
             ))}
@@ -1194,7 +1276,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           <Card style={{breakInside:"avoid",height:isDesktop?"auto":"auto"}}>
             <div style={{fontWeight:isDesktop?800:700,marginBottom:isDesktop?14:10,fontSize:isDesktop?18:15}}>{now.toLocaleString("de-DE",{month:"long",year:"numeric"})}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>
-              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#6b7280",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}
+              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#8b96b0",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isDesktop?6:3}}>{renderCal()}</div>
           </Card>
@@ -1206,23 +1288,23 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:4,height:4,borderRadius:"50%",background:"#6366f1",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDots 2.5s ease-in-out infinite",boxShadow:"0 0 4px rgba(99,102,241,0.8)"}}/>
                 <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#e2e8f0"}}>Weg zur Profitabilität</div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Weg zur Profitabilität</div>
                   <div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div>
                 </div>
               </div>
               {!isDesktop&&<span style={{color:"#6366f1",fontSize:11,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</span>}
             </div>
             {!profExpanded&&!isDesktop&&profitPlan&&<div style={{display:"flex",gap:8,marginBottom:2}}>
-              <div style={{background:"#0a0b16",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#4b5563",fontSize:8}}>EV / TAG</div>
+              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
+                <div style={{color:"#6b7a9a",fontSize:8}}>EV / TAG</div>
                 <div style={{color:profitPlan.dailyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.dailyEV>=0?"+":""}${profitPlan.dailyEV}</div>
               </div>
-              <div style={{background:"#0a0b16",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#4b5563",fontSize:8}}>PROGNOSE MONAT</div>
+              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
+                <div style={{color:"#6b7a9a",fontSize:8}}>PROGNOSE MONAT</div>
                 <div style={{color:profitPlan.monthlyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.monthlyEV>=0?"+":""}${profitPlan.monthlyEV}</div>
               </div>
-              <div style={{background:"#0a0b16",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#4b5563",fontSize:8}}>OVERTRADING</div>
+              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
+                <div style={{color:"#6b7a9a",fontSize:8}}>OVERTRADING</div>
                 <div style={{color:profitPlan.overtradeDays>3?R:G,fontWeight:800,fontSize:13}}>{profitPlan.overtradeDays} Tage</div>
               </div>
             </div>}
@@ -1231,8 +1313,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 {l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:Y},
                 {l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}
               ].map(s=>(
-                <div key={s.l} style={{background:"#0a0b16",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}>
-                  <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                <div key={s.l} style={{background:"#0d1420",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}>
+                  <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
                   <div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div>
                 </div>
               ))}
@@ -1253,12 +1335,12 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                     <span style={{fontSize:14}}>⚠️</span>
                     <div style={{color:"#fca5a5",fontSize:11,fontWeight:600}}>{profitPlan.overtradeDays}/{profitPlan.totalDays} Tage Overtrading – Dein #1 Problem</div>
                   </div>}
-                  <div style={{background:"#0a0b16",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}>
+                  <div style={{background:"#0d1420",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}>
                     <div style={{color:"#6366f1",fontWeight:700,fontSize:11,marginBottom:8,letterSpacing:"0.5px"}}>SETUP 1 MNQ</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
                       {[{l:"STOP LOSS",v:"40 Ticks",s:"$20",c:R},{l:"TAKE PROFIT",v:"80 Ticks",s:"$40",c:G},{l:"CRV",v:"2:1",s:"Risk/Reward",c:Y}].map(s=>(
-                        <div key={s.l} style={{background:"#13141f",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
-                          <div style={{color:"#4b5563",fontSize:8,marginBottom:2}}>{s.l}</div>
+                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
+                          <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
                           <div style={{color:s.c,fontSize:9,opacity:0.7}}>{s.s}</div>
                         </div>
@@ -1272,10 +1354,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                         {l:"MONATE BIS ZIEL",v:monateBis?monateBis+"Mo":"∞",c:monateBis&&monateBis<=6?G:Y,s:"bei akt. Performance"},
                         {l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"},
                       ].map(s=>(
-                        <div key={s.l} style={{background:"#13141f",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}>
-                          <div style={{color:"#4b5563",fontSize:9}}>{s.l}</div>
+                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}>
+                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:800,fontSize:15}}>{s.v}</div>
-                          <div style={{color:"#6b7280",fontSize:9}}>{s.s}</div>
+                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
                         </div>
                       ))}
                     </div>
@@ -1296,7 +1378,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                     <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
                   </div>
                 </div>
-                              );
+              );
             })()}
           </Card>}
 
@@ -1307,10 +1389,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
                 <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#e2e8f0"}}>Mein Monatsziel</div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Mein Monatsziel</div>
                   <div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div>
                 </div>
-              </div>
+                              </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 <button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"22",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️</button>
                 <span style={{color:P,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span>
@@ -1329,22 +1411,22 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               return(
                 <div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                    {[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#e2e8f0"},
+                    {[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#f0f4ff"},
                       {l:"ZIEL",v:"$"+goals.targetBalance.toLocaleString("de-DE"),c:P},
                       {l:"NOCH FEHLT",v:missing<=0?"✅":"+$"+Math.round(missing).toLocaleString("de-DE"),c:missing<=0?G:R}
                     ].map(s=>(
-                      <div key={s.l} style={{background:"#0a0712",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}>
-                        <div style={{color:"#4b5563",fontSize:9,marginBottom:2}}>{s.l}</div>
+                      <div key={s.l} style={{background:"#0f1428",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}>
+                        <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
                         <div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div>
                       </div>
                     ))}
                   </div>
                   <div style={{marginBottom:6}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                      <span style={{color:"#6b7280",fontSize:10}}>Monatsfortschritt</span>
+                      <span style={{color:"#8b96b0",fontSize:10}}>Monatsfortschritt</span>
                       <span style={{color:monthPct>=100?G:P,fontWeight:700,fontSize:10}}>{monthPct}% ({monthPnl>=0?"+":""}${Math.round(monthPnl)} von ${monthNeeded} nötig)</span>
                     </div>
-                    <div style={{height:6,borderRadius:3,background:"#1e1428",overflow:"hidden"}}>
+                    <div style={{height:6,borderRadius:3,background:"#1e2540",overflow:"hidden"}}>
                       <div style={{height:"100%",borderRadius:3,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
                     </div>
                   </div>
@@ -1354,14 +1436,14 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                         {l:"HANDELSTAGE NOCH",v:dLeft2+" Tage",c:dLeft2>5?G:dLeft2>2?Y:R,s:"diesen Monat"},
                         {l:"GEWINN/TAG NÖTIG",v:missing<=0?"✅ Erreicht":"$"+dailyNeed,c:missing<=0?G:dailyNeed<100?G:Y,s:"um Ziel zu erreichen"},
                         {l:"GEWINN/TRADE NÖTIG",v:missing<=0?"✅":"$"+tradeNeed,c:missing<=0?G:tradeNeed<50?G:Y,s:"bei 2 Trades/Tag"},
-                        {l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#e2e8f0",s:dLeft2+" Tage × "+DAILY_LIMIT},
+                        {l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#f0f4ff",s:dLeft2+" Tage × "+DAILY_LIMIT},
                         {l:"DIESEN MONAT P&L",v:(monthPnl>=0?"+":"")+"$"+monthPnl,c:pc(monthPnl),s:"seit Monatsstart"},
                         {l:"REGELQUOTE",v:disc+"%",c:sc(disc),s:"Ziel: "+goals.disc+"%"},
                       ].map(s=>(
-                        <div key={s.l} style={{background:"#0a0712",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}>
-                          <div style={{color:"#4b5563",fontSize:9}}>{s.l}</div>
+                        <div key={s.l} style={{background:"#0f1428",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}>
+                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div>
-                          <div style={{color:"#6b7280",fontSize:9}}>{s.s}</div>
+                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
                         </div>
                       ))}
                     </div>
@@ -1374,6 +1456,70 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                       </div>
                     </div>
                   </div>}
+                </div>
+              );
+            })()}
+          </Card>
+
+
+          {/* TRADING PROBLEME CARD */}
+          <Card style={{borderColor:"rgba(245,158,11,0.2)",background:"linear-gradient(145deg,#1a1508 0%,#0f1010 100%)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,cursor:"pointer"}} onClick={()=>setProbExp(p=>!p)}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle,#fcd34d,#f59e0b 60%,#92400e)",animation:"livingOrb 2s ease-in-out infinite",boxShadow:"0 0 10px rgba(245,158,11,0.6)",flexShrink:0}}/>
+                <div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Meine Trading-Probleme</div>
+                  <div style={{color:"#f59e0b",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KI-DIAGNOSE</div>
+                </div>
+              </div>
+              <span style={{color:"#f59e0b",fontSize:11,fontWeight:600}}>{probExp?"▲":"▼"}</span>
+            </div>
+            {(()=>{
+              const PROBS=[
+                {k:"overtrading",l:"Overtrading",d:"Zu viele Trades pro Tag"},
+                {k:"fomo",l:"FOMO",d:"Fear of Missing Out"},
+                {k:"revenge",l:"Revenge Trading",d:"Nach Verlust sofort wieder einsteigen"},
+                {k:"early_exit",l:"Zu früh aussteigen",d:"TP nicht abwarten"},
+                {k:"no_sl",l:"SL nicht einhalten",d:"Stop Loss verschoben oder ignoriert"},
+                {k:"outside_window",l:"Falsche Zeiten",d:"Außerhalb des Zeitfensters traden"},
+                {k:"impulse",l:"Impuls-Trading",d:"Kein Setup, einfach rein"},
+                {k:"fear",l:"Angst vor Verlusten",d:"Zögern bei guten Setups"},
+              ];
+              const selected=Object.keys(problems).filter(k=>problems[k]);
+              return(
+                <div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                    {PROBS.map(p=>(
+                      <button key={p.k} onClick={()=>saveProblems({...problems,[p.k]:!problems[p.k]})}
+                        title={p.d}
+                        style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,
+                          background:problems[p.k]?"rgba(245,158,11,0.25)":"rgba(255,255,255,0.04)",
+                          border:"1px solid "+(problems[p.k]?"rgba(245,158,11,0.6)":"rgba(255,255,255,0.1)"),
+                          color:problems[p.k]?"#fcd34d":"#6b7a9a",
+                          transition:"all .2s"}}>
+                        {problems[p.k]?"✓ ":""}{p.l}
+                      </button>
+                    ))}
+                  </div>
+                  {selected.length>0&&(
+                    <button onClick={analyzeProblems} disabled={probLoading}
+                      style={{width:"100%",padding:"10px",borderRadius:10,fontWeight:700,fontSize:13,
+                        background:"linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.1))",
+                        border:"1px solid rgba(245,158,11,0.3)",color:probLoading?"#6b7280":"#fcd34d",marginBottom:8}}>
+                      {probLoading?"🤖 Analysiere...":"🤖 KI-Diagnose starten ("+selected.length+" Probleme)"}
+                    </button>
+                  )}
+                  {probExp&&probAnalysis&&(
+                    <div style={{background:"rgba(245,158,11,0.06)",borderRadius:10,padding:12,border:"1px solid rgba(245,158,11,0.15)"}}>
+                      <div style={{color:"#f59e0b",fontSize:11,fontWeight:700,marginBottom:6}}>🎯 Dein persönlicher Plan:</div>
+                      <div style={{color:"#a8b8d0",fontSize:11,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{probAnalysis}</div>
+                    </div>
+                  )}
+                  {!probAnalysis&&selected.length===0&&(
+                    <div style={{color:"#4a5568",fontSize:11,textAlign:"center",padding:"4px 0"}}>
+                      Wähle deine Probleme → KI gibt dir einen konkreten Plan
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -1392,11 +1538,11 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           <Card style={{borderColor:now.getHours()>=16?G+"44":Y+"44"}}>
             <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>Zeitfenster</div>
             <div style={{color:now.getHours()>=16?G:Y,fontSize:24,fontWeight:800}}>{now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr</div>
-            <div style={{color:"#6b7280",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Warte auf 16:15 Uhr"}</div>
+            <div style={{color:"#8b96b0",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Warte auf 16:15 Uhr"}</div>
           </Card>
           {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card>
             <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>✅ Pre-Trade Checkliste</div>
-            <div style={{color:"#6b7280",fontSize:11,marginBottom:12}}>Alle 4 Punkte abhaken vor dem Trade</div>
+            <div style={{color:"#8b96b0",fontSize:11,marginBottom:12}}>Alle 4 Punkte abhaken vor dem Trade</div>
             {[{id:"c1",q:"Geplantes Setup – kein Impuls?"},{id:"c2",q:"SL und TP definiert?"},{id:"c3",q:"Emotional ruhig und klar?"},{id:"c4",q:"Nach 16:15 Uhr?"}].map(it=>(
               <Chk key={it.id} checked={checks[it.id]} onClick={()=>{const n={...checks,[it.id]:!checks[it.id]};setChecks(n);localStorage.setItem("ttp_checks",JSON.stringify({date:todayISO(),data:n}));}} label={it.q}/>
             ))}
@@ -1437,10 +1583,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <Field label="DATUM">
-                  <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                  <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                 </Field>
                 <Field label="UHRZEIT">
-                  <input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                  <input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                 </Field>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -1461,19 +1607,19 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 </select>
               </Field>
               <Field label="NETTO P&L ($) *">
-                <input type="number" step="0.01" value={form.pnl} onChange={e=>setForm(f=>({...f,pnl:e.target.value}))} placeholder="z.B. 40 oder -20" style={{borderColor:form.pnl?(parseFloat(form.pnl)>=0?G+"88":R+"88"):"#2d3548"}}/>
+                <input type="number" step="0.01" value={form.pnl} onChange={e=>setForm(f=>({...f,pnl:e.target.value}))} placeholder="z.B. 40 oder -20" style={{borderColor:form.pnl?(parseFloat(form.pnl)>=0?G+"88":R+"88"):"#1e2d48"}}/>
               </Field>
               <div style={{background:"#0a160f",borderRadius:10,padding:"10px 12px",border:"1px solid "+G+"33"}}>
                 <div style={{color:G,fontSize:11,fontWeight:600}}>1 MNQ: SL 40 Ticks ($20) | TP 80 Ticks ($40)</div>
               </div>
-              <div style={{background:"#0f1117",borderRadius:10,padding:12,border:"1px solid #2d3548"}}>
-                <div style={{color:"#6b7280",fontSize:11,marginBottom:6,fontWeight:600}}>REGELN EINGEHALTEN?</div>
+              <div style={{background:"#0d1320",borderRadius:10,padding:12,border:"1px solid #2d3548"}}>
+                <div style={{color:"#8b96b0",fontSize:11,marginBottom:6,fontWeight:600}}>REGELN EINGEHALTEN?</div>
                 {RULES.map(r=>(<Chk key={r.id} checked={form.rules[r.id]} onClick={()=>setForm(f=>({...f,rules:{...f.rules,[r.id]:!f.rules[r.id]}}))} label={r.label}/>))}
               </div>
               <Field label="NOTIZEN">
                 <textarea rows={2} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Emotion? Was lief gut/schlecht?" style={{resize:"vertical"}}/>
               </Field>
-              <button onClick={addTrade} style={{background:canTrade?B:"#374151",color:"#fff",padding:13,fontSize:14,fontWeight:700,width:"100%",borderRadius:10,opacity:canTrade?1:0.6}} disabled={!canTrade}>
+              <button onClick={addTrade} style={{background:canTrade?B:"#4a5568",color:"#fff",padding:13,fontSize:14,fontWeight:700,width:"100%",borderRadius:10,opacity:canTrade?1:0.6}} disabled={!canTrade}>
                 {inPause?"⏸ Warten... "+pStr:todayBlocked?"Heute gesperrt":overtradingToday?"3 Trades – Gesperrt":atLimit?"Limit erreicht":!allChecked?"🔒 Erst Regeln abhaken":"Trade speichern – Timer startet!"}
               </button>
             </div>
@@ -1493,8 +1639,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             return(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
                 {[{l:"TRADES",v:t09.length,c:B},{l:"Ø WIN",v:"+$"+avgW,c:G},{l:"Ø LOSS",v:"-$"+avgL,c:R},{l:"PROFIT F.",v:pf.toFixed(1)+"x",c:pf>=1?G:R}].map(s=>(
-                  <div key={s.l} style={{background:"#1a1f2e",border:"1px solid #2d3548",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-                    <div style={{color:"#4b5563",fontSize:8,marginBottom:3}}>{s.l}</div>
+                  <div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+                    <div style={{color:"#6b7a9a",fontSize:8,marginBottom:3}}>{s.l}</div>
                     <div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div>
                   </div>
                 ))}
@@ -1504,13 +1650,13 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 
           {/* EQUITY KURVE */}
           <Card>
-            <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#e2e8f0"}}>Equity Kurve</div>
+            <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Equity Kurve</div>
             <ResponsiveContainer width="100%" height={140}>
               <LineChart data={equity}>
-                <XAxis dataKey="i" tick={{fill:"#4b5563",fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:"#4b5563",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+v} width={55}/>
-                <Tooltip formatter={v=>[fd(v),"Kumuliert"]} contentStyle={{background:"#1a1f2e",border:"1px solid #2d3548",borderRadius:8,fontSize:11}}/>
-                <ReferenceLine y={0} stroke="#2d3548" strokeDasharray="4 4"/>
+                <XAxis dataKey="i" tick={{fill:"#6b7a9a",fontSize:9}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fill:"#6b7a9a",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+v} width={55}/>
+                <Tooltip formatter={v=>[fd(v),"Kumuliert"]} contentStyle={{background:"#131d30",border:"1px solid #2d3548",borderRadius:8,fontSize:11}}/>
+                <ReferenceLine y={0} stroke="#1e2d48" strokeDasharray="4 4"/>
                 <Line type="monotone" dataKey="v" stroke={B} strokeWidth={2} dot={false}/>
               </LineChart>
             </ResponsiveContainer>
@@ -1523,7 +1669,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             const sorted=Object.entries(hours).sort(([a],[b])=>parseInt(a)-parseInt(b));
             return sorted.length>0&&(
               <Card>
-                <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#e2e8f0"}}>Stunden-Performance</div>
+                <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Stunden-Performance</div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {sorted.map(([h,d])=>{
                     const wr=Math.round(d.wins/d.n*100);
@@ -1531,12 +1677,12 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                     const isWindow=parseInt(h)>=16&&parseInt(h)<=17;
                     return(
                       <div key={h} style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{color:isWindow?G:"#6b7280",fontSize:11,fontWeight:isWindow?700:400,width:36,flexShrink:0}}>{h}:00{isWindow&&" ⚡"}</div>
-                        <div style={{flex:1,height:20,background:"#0f1117",borderRadius:4,overflow:"hidden",position:"relative"}}>
+                        <div style={{color:isWindow?G:"#8b96b0",fontSize:11,fontWeight:isWindow?700:400,width:36,flexShrink:0}}>{h}:00{isWindow&&" ⚡"}</div>
+                        <div style={{flex:1,height:20,background:"#0d1320",borderRadius:4,overflow:"hidden",position:"relative"}}>
                           <div style={{height:"100%",width:wr+"%",background:c+"44",borderRadius:4}}/>
                           <div style={{position:"absolute",top:0,left:4,right:0,height:"100%",display:"flex",alignItems:"center"}}>
                             <span style={{color:c,fontSize:10,fontWeight:700}}>{wr}% WR</span>
-                            <span style={{color:"#4b5563",fontSize:10,marginLeft:6}}>{d.n} Trades · {d.pnl>=0?"+":""}${Math.round(d.pnl)}</span>
+                            <span style={{color:"#6b7a9a",fontSize:10,marginLeft:6}}>{d.n} Trades · {d.pnl>=0?"+":""}${Math.round(d.pnl)}</span>
                           </div>
                         </div>
                       </div>
@@ -1554,20 +1700,20 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             const sorted=Object.entries(setups).sort(([,a],[,b])=>b.pnl-a.pnl);
             return sorted.length>0&&(
               <Card>
-                <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#e2e8f0"}}>Setup-Performance</div>
+                <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Setup-Performance</div>
                 {sorted.map(([name,d])=>{
                   const wr=Math.round(d.wins/d.n*100);
                   const c=wr>=60?G:wr>=40?Y:R;
                   return(
-                    <div key={name} style={{marginBottom:8,padding:"8px 10px",background:"#0f1117",borderRadius:8,borderLeft:"3px solid "+c}}>
+                    <div key={name} style={{marginBottom:8,padding:"8px 10px",background:"#0d1320",borderRadius:8,borderLeft:"3px solid "+c}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#e2e8f0"}}>{name}</div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#f0f4ff"}}>{name}</div>
                         <div style={{color:pc(d.pnl),fontWeight:800,fontSize:12}}>{d.pnl>=0?"+":""}${Math.round(d.pnl)}</div>
                       </div>
                       <div style={{display:"flex",gap:12}}>
                         <span style={{color:c,fontSize:10,fontWeight:700}}>{wr}% WR</span>
-                        <span style={{color:"#4b5563",fontSize:10}}>{d.n} Trades</span>
-                        <span style={{color:"#4b5563",fontSize:10}}>Ø {d.wins} TP / {d.n-d.wins} SL</span>
+                        <span style={{color:"#6b7a9a",fontSize:10}}>{d.n} Trades</span>
+                        <span style={{color:"#6b7a9a",fontSize:10}}>Ø {d.wins} TP / {d.n-d.wins} SL</span>
                       </div>
                     </div>
                   );
@@ -1586,25 +1732,25 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             return(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <Card>
-                  <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#e2e8f0"}}>Streak-Analyse</div>
+                  <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#f0f4ff"}}>Streak-Analyse</div>
                   {[{l:"Aktuell",v:curStreak>0?"+"+curStreak+" Siege":curStreak<0?Math.abs(curStreak)+" Verluste":"Neutral",c:curStreak>0?G:curStreak<0?R:Y},
                     {l:"Best. Siegesserie",v:maxWin+" Trades",c:G},
                     {l:"Schlechteste Serie",v:Math.abs(maxLoss)+" Verluste",c:R},
                   ].map(s=>(
                     <div key={s.l} style={{marginBottom:6}}>
-                      <div style={{color:"#4b5563",fontSize:9}}>{s.l}</div>
+                      <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
                       <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
                     </div>
                   ))}
                 </Card>
                 <Card>
-                  <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#e2e8f0"}}>Mentaler Score</div>
+                  <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#f0f4ff"}}>Mentaler Score</div>
                   {[{l:"Regelquote Ø",v:avgDisc+"%",c:sc(avgDisc)},
                     {l:"Disziplin-Trend",v:disc>avgDisc?"↗ Im Aufbau":disc<avgDisc?"↘ Ausbaufähig":"→ Konstant",c:disc>=avgDisc?G:Y},
                     {l:"Overtrading-Tage",v:profitPlan?profitPlan.overtradeDays+"T":"–",c:profitPlan&&profitPlan.overtradeDays>3?R:G},
                   ].map(s=>(
                     <div key={s.l} style={{marginBottom:6}}>
-                      <div style={{color:"#4b5563",fontSize:9}}>{s.l}</div>
+                      <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
                       <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
                     </div>
                   ))}
@@ -1615,18 +1761,18 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 
           {/* BESTE HANDELSTAGE */}
           <Card>
-            <div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#e2e8f0"}}>Handelstage nach Wochentag</div>
+            <div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#f0f4ff"}}>Handelstage nach Wochentag</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
               {weekdayStats.map(d=>{
                 const c=d.pct>=60?G:d.pct>=40?Y:R;
                 return(
-                  <div key={d.label} style={{background:"#0f1117",borderRadius:8,padding:"8px 4px",textAlign:"center",border:"1px solid "+(d.days>0?c+"33":"#2d3548")}}>
-                    <div style={{fontWeight:700,fontSize:13,marginBottom:2,color:d.days>0?c:"#374151"}}>{d.label}</div>
+                  <div key={d.label} style={{background:"#0d1320",borderRadius:8,padding:"8px 4px",textAlign:"center",border:"1px solid "+(d.days>0?c+"33":"#1e2d48")}}>
+                    <div style={{fontWeight:700,fontSize:13,marginBottom:2,color:d.days>0?c:"#4a5568"}}>{d.label}</div>
                     {d.days>0?(<>
                       <div style={{color:c,fontWeight:800,fontSize:16}}>{d.pct}%</div>
                       <div style={{color:pc(d.pnl),fontSize:10,fontWeight:600}}>{d.pnl>=0?"+":"-"}${Math.abs(d.pnl).toFixed(0)}</div>
-                      <div style={{color:"#374151",fontSize:8}}>{d.days}T</div>
-                    </>):<div style={{color:"#374151",fontSize:10,marginTop:6}}>–</div>}
+                      <div style={{color:"#4a5568",fontSize:8}}>{d.days}T</div>
+                    </>):<div style={{color:"#4a5568",fontSize:10,marginTop:6}}>–</div>}
                   </div>
                 );
               })}
@@ -1635,13 +1781,13 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 
           {/* HALTEDAUER */}
           <Card>
-            <div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#e2e8f0"}}>Haltedauer</div>
+            <div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#f0f4ff"}}>Haltedauer</div>
             {durBuckets.map(b=>(
               <div key={b.label} style={{marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:52,color:"#6b7280",fontSize:11,flexShrink:0}}>{b.label}</div>
+                <div style={{width:52,color:"#8b96b0",fontSize:11,flexShrink:0}}>{b.label}</div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                    <span style={{color:"#4b5563",fontSize:9}}>{b.n} Trades</span>
+                    <span style={{color:"#6b7a9a",fontSize:9}}>{b.n} Trades</span>
                     <span style={{color:sc(b.wr),fontSize:9,fontWeight:700}}>{b.wr}% · {b.pnl>=0?"+":""}${Math.round(b.pnl)}</span>
                   </div>
                   <Bar2 pct={b.wr} color={sc(b.wr)}/>
@@ -1652,10 +1798,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 
           {/* PSYCHOLOGIE JOURNAL */}
           <Card style={{borderColor:P+"33"}}>
-            <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#e2e8f0"}}>Tages-Reflexion</div>
+            <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Tages-Reflexion</div>
             {[{id:"good",label:"Was lief gut?",p:"Setup, Disziplin..."},{id:"bad",label:"Was verbessern?",p:"Impuls, zu früh..."},{id:"emotion",label:"Emotionaler Zustand?",p:"Ruhig, fokussiert..."}].map(q=>(
               <div key={q.id} style={{marginBottom:8}}>
-                <label style={{color:"#6b7280",fontSize:10,display:"block",marginBottom:3}}>{q.label}</label>
+                <label style={{color:"#8b96b0",fontSize:10,display:"block",marginBottom:3}}>{q.label}</label>
                 <textarea rows={2} value={todayJ[q.id]||""} onChange={e=>setTodayJ(p=>({...p,[q.id]:e.target.value}))} placeholder={q.p} style={{resize:"vertical"}}/>
               </div>
             ))}
@@ -1667,10 +1813,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           <Card>
             <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>🔍 Filter</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <Field label="VON"><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
-              <Field label="BIS"><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
+              <Field label="VON"><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+              <Field label="BIS"><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
             </div>
-            {(dateFrom||dateTo)&&<button onClick={()=>{setDateFrom("");setDateTo("");}} style={{background:"none",color:"#6b7280",fontSize:11,padding:"4px 0",width:"100%"}}>Filter zurücksetzen ×</button>}
+            {(dateFrom||dateTo)&&<button onClick={()=>{setDateFrom("");setDateTo("");}} style={{background:"none",color:"#8b96b0",fontSize:11,padding:"4px 0",width:"100%"}}>Filter zurücksetzen ×</button>}
           </Card>
           {(dateFrom||dateTo)&&(()=>{
             const filtered=t09.filter(t=>(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo));
@@ -1679,13 +1825,13 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             return(<>
               <Card style={{borderColor:B+"44"}}>
                 <div style={{display:"flex",justifyContent:"space-between"}}>
-                  <div><div style={{color:"#6b7280",fontSize:10}}>{filtered.length} Trades</div><div style={{color:pc(sum),fontWeight:800,fontSize:24}}>{sum>=0?"+":"-"}${Math.abs(sum).toFixed(2)}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{color:"#6b7280",fontSize:10}}>WR</div><div style={{color:wr>=50?G:R,fontWeight:800,fontSize:20}}>{wr}%</div></div>
+                  <div><div style={{color:"#8b96b0",fontSize:10}}>{filtered.length} Trades</div><div style={{color:pc(sum),fontWeight:800,fontSize:24}}>{sum>=0?"+":"-"}${Math.abs(sum).toFixed(2)}</div></div>
+                  <div style={{textAlign:"right"}}><div style={{color:"#8b96b0",fontSize:10}}>WR</div><div style={{color:wr>=50?G:R,fontWeight:800,fontSize:20}}>{wr}%</div></div>
                 </div>
               </Card>
               {[...filtered].reverse().map(t=>(
-                <div key={t.id} style={{background:"#1a1f2e",borderRadius:10,padding:"10px 12px",borderLeft:"3px solid "+pc(t.pnl),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div><div style={{display:"flex",gap:6,marginBottom:2}}><span style={{fontWeight:800,color:pc(t.pnl)}}>{fd(t.pnl)}</span><span style={{fontSize:10,color:"#6b7280"}}>{t.contract} · {t.dir}</span></div><div style={{color:"#6b7280",fontSize:10}}>{t.date} {t.time}</div></div>
+                <div key={t.id} style={{background:"#131d30",borderRadius:10,padding:"10px 12px",borderLeft:"3px solid "+pc(t.pnl),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div><div style={{display:"flex",gap:6,marginBottom:2}}><span style={{fontWeight:800,color:pc(t.pnl)}}>{fd(t.pnl)}</span><span style={{fontSize:10,color:"#8b96b0"}}>{t.contract} · {t.dir}</span></div><div style={{color:"#8b96b0",fontSize:10}}>{t.date} {t.time}</div></div>
                   <button onClick={()=>setDelId(t.id)} style={{background:"none",color:R,fontSize:16,padding:"2px 4px",opacity:0.5}}>×</button>
                 </div>
               ))}
@@ -1696,26 +1842,26 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             {monthlyStats.map(ms=>{
               const isExp=expandedMonth===ms.mo;
               return(
-                <div key={ms.mo} style={{marginBottom:8,background:"#0f1117",borderRadius:10,padding:"10px 12px",border:isExp?"1px solid "+B+"55":"1px solid transparent"}}>
+                <div key={ms.mo} style={{marginBottom:8,background:"#0d1320",borderRadius:10,padding:"10px 12px",border:isExp?"1px solid "+B+"55":"1px solid transparent"}}>
                   <div onClick={()=>setExpandedMonth(isExp?null:ms.mo)} style={{cursor:"pointer"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <span style={{color:"#6b7280",fontSize:11,display:"inline-block",transform:isExp?"rotate(90deg)":"none"}}>▶</span>
+                        <span style={{color:"#8b96b0",fontSize:11,display:"inline-block",transform:isExp?"rotate(90deg)":"none"}}>▶</span>
                         <div style={{fontWeight:700,fontSize:13}}>{ms.mo}</div>
                       </div>
                       <div style={{color:pc(ms.pnl),fontWeight:800,fontSize:15}}>{ms.pnl>=0?"+":"-"}${Math.abs(ms.pnl).toFixed(0)}</div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,fontSize:10}}>
-                      <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>Trades</div><div style={{fontWeight:700}}>{ms.trades}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>WR</div><div style={{color:ms.wr>=50?G:R,fontWeight:700}}>{ms.wr}%</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>TP</div><div style={{color:G,fontWeight:700}}>{ms.wins}</div></div>
-                      <div style={{textAlign:"center"}}><div style={{color:"#6b7280"}}>SL</div><div style={{color:R,fontWeight:700}}>{ms.losses}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#8b96b0"}}>Trades</div><div style={{fontWeight:700}}>{ms.trades}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#8b96b0"}}>WR</div><div style={{color:ms.wr>=50?G:R,fontWeight:700}}>{ms.wr}%</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#8b96b0"}}>TP</div><div style={{color:G,fontWeight:700}}>{ms.wins}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{color:"#8b96b0"}}>SL</div><div style={{color:R,fontWeight:700}}>{ms.losses}</div></div>
                     </div>
                   </div>
                   {isExp&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #2d3548",display:"flex",flexDirection:"column",gap:5}}>
                     {[...t09.filter(t=>t.date.startsWith(ms.mo))].reverse().map(t=>(
-                      <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 8px",background:"#1a1f2e",borderRadius:6,borderLeft:"2px solid "+pc(t.pnl)}}>
-                        <div><div style={{fontSize:11,fontWeight:700,color:pc(t.pnl)}}>{fd(t.pnl)} <span style={{color:"#6b7280",fontWeight:400}}>· {t.contract} · {t.dir}</span></div><div style={{color:"#6b7280",fontSize:10}}>{t.date} {t.time}</div></div>
+                      <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 8px",background:"#131d30",borderRadius:6,borderLeft:"2px solid "+pc(t.pnl)}}>
+                        <div><div style={{fontSize:11,fontWeight:700,color:pc(t.pnl)}}>{fd(t.pnl)} <span style={{color:"#8b96b0",fontWeight:400}}>· {t.contract} · {t.dir}</span></div><div style={{color:"#8b96b0",fontSize:10}}>{t.date} {t.time}</div></div>
                         <button onClick={e=>{e.stopPropagation();setDelId(t.id);}} style={{background:"none",color:R,fontSize:14,padding:"2px 4px",opacity:0.4}}>×</button>
                       </div>
                     ))}
@@ -1749,10 +1895,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:0,right:0,bottom:0,width:"min(300px,82vw)",background:"linear-gradient(180deg,#1a1f2e,#0f1117)",borderLeft:"1px solid #2d3548",overflowY:"auto",padding:"20px 18px",paddingBottom:"calc(20px + env(safe-area-inset-bottom,0px))"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <div>
-              <div style={{fontWeight:800,fontSize:20,color:"#e2e8f0"}}>Einstellungen</div>
+              <div style={{fontWeight:800,fontSize:20,color:"#f0f4ff"}}>Einstellungen</div>
               <div style={{color:"#6366f1",fontSize:10,fontWeight:600,letterSpacing:"0.5px"}}>MINDRISK KONFIGURATION</div>
             </div>
-            <button onClick={()=>setSettingsOpen(false)} style={{background:"rgba(255,255,255,0.05)",border:"1px solid #2d3548",borderRadius:10,width:34,height:34,padding:0,color:"#6b7280",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <button onClick={()=>setSettingsOpen(false)} style={{background:"rgba(255,255,255,0.05)",border:"1px solid #2d3548",borderRadius:10,width:34,height:34,padding:0,color:"#8b96b0",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -1768,76 +1914,76 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               <div onClick={()=>setSettingsSection(p=>p===sec.id?null:sec.id)}
                 style={{padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",background:settingsSection===sec.id?"rgba(99,102,241,0.08)":"transparent"}}>
                 <div>
-                  <div style={{fontWeight:700,fontSize:13,color:"#e2e8f0"}}>{sec.label}</div>
-                  <div style={{color:"#4b5563",fontSize:10}}>{sec.sub}</div>
+                  <div style={{fontWeight:700,fontSize:13,color:"#f0f4ff"}}>{sec.label}</div>
+                  <div style={{color:"#6b7a9a",fontSize:10}}>{sec.sub}</div>
                 </div>
-                <div style={{color:settingsSection===sec.id?B:"#4b5563",fontSize:12,fontWeight:700,transform:settingsSection===sec.id?"rotate(180deg)":"none",transition:"transform .2s"}}>▼</div>
+                <div style={{color:settingsSection===sec.id?B:"#6b7a9a",fontSize:12,fontWeight:700,transform:settingsSection===sec.id?"rotate(180deg)":"none",transition:"transform .2s"}}>▼</div>
               </div>
 
-              {settingsSection==="goals"&&sec.id==="goals"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0f1117"}}>
+              {settingsSection==="goals"&&sec.id==="goals"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0d1320"}}>
                 <div style={{marginBottom:12}}>
-                  <div style={{color:"#6b7280",fontSize:10,fontWeight:600,marginBottom:6}}>ZIEL-ZEITRAUM</div>
+                  <div style={{color:"#8b96b0",fontSize:10,fontWeight:600,marginBottom:6}}>ZIEL-ZEITRAUM</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
                     {[{k:"month",l:"Monat"},{k:"3m",l:"3 Monate"},{k:"6m",l:"6 Monate"}].map(p=>(
-                      <button key={p.k} onClick={()=>setGoalPeriod(p.k)} style={{background:goalPeriod===p.k?B+"33":"#1a1f2e",border:"1px solid "+(goalPeriod===p.k?B:"#2d3548"),color:goalPeriod===p.k?B:"#6b7280",padding:"7px 4px",borderRadius:8,fontSize:11,fontWeight:600}}>{p.l}</button>
+                      <button key={p.k} onClick={()=>setGoalPeriod(p.k)} style={{background:goalPeriod===p.k?B+"33":"#131d30",border:"1px solid "+(goalPeriod===p.k?B:"#1e2d48"),color:goalPeriod===p.k?B:"#8b96b0",padding:"7px 4px",borderRadius:8,fontSize:11,fontWeight:600}}>{p.l}</button>
                     ))}
                   </div>
                 </div>
                 <Field label="ZIEL-SALDO ($)">
-                  <input type="number" defaultValue={goals.targetBalance} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){const newG={...goals,targetBalance:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));} }} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                  <input type="number" defaultValue={goals.targetBalance} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){const newG={...goals,targetBalance:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));} }} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                 </Field>
                 <div style={{marginTop:8,background:"rgba(99,102,241,0.08)",borderRadius:8,padding:"8px 10px",border:"1px solid rgba(99,102,241,0.15)"}}>
-                  <div style={{color:"#6b7280",fontSize:10}}>Aktuell: <span style={{color:"#e2e8f0",fontWeight:700}}>${saldo.toFixed(0)}</span> · Noch fehlen: <span style={{color:R,fontWeight:700}}>${Math.max(0,goals.targetBalance-saldo).toFixed(0)}</span></div>
+                  <div style={{color:"#8b96b0",fontSize:10}}>Aktuell: <span style={{color:"#f0f4ff",fontWeight:700}}>${saldo.toFixed(0)}</span> · Noch fehlen: <span style={{color:R,fontWeight:700}}>${Math.max(0,goals.targetBalance-saldo).toFixed(0)}</span></div>
                 </div>
                 <div style={{marginTop:8}}>
                   <Field label="REGELQUOTE-ZIEL (%)">
-                    <input type="number" defaultValue={goals.disc} onBlur={e=>{const v=parseInt(e.target.value);if(!isNaN(v)){const newG={...goals,disc:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                    <input type="number" defaultValue={goals.disc} onBlur={e=>{const v=parseInt(e.target.value);if(!isNaN(v)){const newG={...goals,disc:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                   </Field>
                 </div>
               </div>}
 
-              {settingsSection==="rules"&&sec.id==="rules"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0f1117",display:"flex",flexDirection:"column",gap:10}}>
-                <Field label="MAX TRADES / TAG"><input type="number" value={settings.maxTrades} onChange={e=>saveSettings({...settings,maxTrades:parseInt(e.target.value)||2})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
-                <Field label="PFLICHTPAUSE (MIN)"><input type="number" value={settings.pauseMins} onChange={e=>saveSettings({...settings,pauseMins:parseInt(e.target.value)||15})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
+              {settingsSection==="rules"&&sec.id==="rules"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0d1320",display:"flex",flexDirection:"column",gap:10}}>
+                <Field label="MAX TRADES / TAG"><input type="number" value={settings.maxTrades} onChange={e=>saveSettings({...settings,maxTrades:parseInt(e.target.value)||2})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                <Field label="PFLICHTPAUSE (MIN)"><input type="number" value={settings.pauseMins} onChange={e=>saveSettings({...settings,pauseMins:parseInt(e.target.value)||15})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  <Field label="FENSTER VON"><input type="time" value={settings.windowStart} onChange={e=>saveSettings({...settings,windowStart:e.target.value})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
-                  <Field label="FENSTER BIS"><input type="time" value={settings.windowEnd} onChange={e=>saveSettings({...settings,windowEnd:e.target.value})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#e2e8f0",width:"100%",outline:"none"}}/></Field>
+                  <Field label="FENSTER VON"><input type="time" value={settings.windowStart} onChange={e=>saveSettings({...settings,windowStart:e.target.value})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                  <Field label="FENSTER BIS"><input type="time" value={settings.windowEnd} onChange={e=>saveSettings({...settings,windowEnd:e.target.value})} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
                 </div>
               </div>}
 
-              {settingsSection==="coach"&&sec.id==="coach"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0f1117"}}>
-                <div style={{color:"#6b7280",fontSize:10,marginBottom:6}}>KI liest das bei JEDER Antwort:</div>
+              {settingsSection==="coach"&&sec.id==="coach"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0d1320"}}>
+                <div style={{color:"#8b96b0",fontSize:10,marginBottom:6}}>KI liest das bei JEDER Antwort:</div>
                 <textarea rows={5} value={coachProfile} onChange={e=>{setCoachProfile(e.target.value);localStorage.setItem('ttp_coach_profile',e.target.value);}}
                   placeholder="Ich bin Jeronimo. Ich trade MNQ/NQ bei TTP. Mein Problem ist Overtrading nach Verlusten..."
                   style={{resize:"vertical",fontSize:11,lineHeight:1.5,width:"100%",marginBottom:8}}/>
                 <div style={{color:G,fontSize:9,marginBottom:10}}>Schreib auch Psychologie, Schwächen, Ziele</div>
                 {coachMemory.length>0&&<div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                    <div style={{color:"#6b7280",fontSize:10,fontWeight:600}}>GEDÄCHTNIS ({coachMemory.length} Einträge)</div>
+                    <div style={{color:"#8b96b0",fontSize:10,fontWeight:600}}>GEDÄCHTNIS ({coachMemory.length} Einträge)</div>
                     <button onClick={()=>{if(confirm("Löschen?")){setCoachMemory([]);localStorage.removeItem('ttp_coach_memory');}}} style={{background:"none",color:R,fontSize:10,padding:0}}>löschen</button>
                   </div>
                   {coachMemory.slice(0,4).map((m,i)=>(
-                    <div key={i} style={{fontSize:10,color:"#94a3b8",padding:"3px 0",borderBottom:"1px solid #2d3548"}}>
-                      <span style={{color:"#4b5563",fontSize:9}}>{m.date}: </span>{m.note.slice(0,70)}
+                    <div key={i} style={{fontSize:10,color:"#a8b8d0",padding:"3px 0",borderBottom:"1px solid #2d3548"}}>
+                      <span style={{color:"#6b7a9a",fontSize:9}}>{m.date}: </span>{m.note.slice(0,70)}
                     </div>
                   ))}
                 </div>}
               </div>}
 
-              {settingsSection==="data"&&sec.id==="data"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0f1117"}}>
+              {settingsSection==="data"&&sec.id==="data"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0d1320"}}>
                 <Field label="SALDO ($)">
-                  <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                  <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                 </Field>
                 <div style={{marginTop:8}}>
                   <Field label="MAX DD LEVEL ($)">
-                    <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#e2e8f0",width:"100%",outline:"none"}}/>
+                    <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                   </Field>
                 </div>
                 <button onClick={()=>{if(window.confirm("Alle Daten loeschen?")){{localStorage.clear();window.location.reload();}}}} style={{marginTop:12,background:"rgba(239,68,68,0.08)",color:R,border:"1px solid rgba(239,68,68,0.2)",padding:"10px 14px",width:"100%",fontWeight:600,fontSize:12,borderRadius:10}}>Alle Daten löschen</button>
               </div>}
             </div>
           ))}
-          <div style={{paddingTop:12,color:"#374151",fontSize:10,textAlign:"center"}}>MindRisk v2.0 · Claude AI ✅</div>
+          <div style={{paddingTop:12,color:"#4a5568",fontSize:10,textAlign:"center"}}>MindRisk v2.0 · Claude AI ✅</div>
         </div>
       </div>}
 
@@ -1859,7 +2005,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           </button>
         )}
         {aiOpen&&(
-          <div style={{width:320,maxWidth:"calc(100vw - 32px)",background:"#1a1f2e",border:"1px solid #6366f1",borderRadius:16,boxShadow:"0 8px 32px rgba(99,102,241,0.3)",display:"flex",flexDirection:"column",maxHeight:"70vh"}}>
+          <div style={{width:320,maxWidth:"calc(100vw - 32px)",background:"#131d30",border:"1px solid #6366f1",borderRadius:16,boxShadow:"0 8px 32px rgba(99,102,241,0.3)",display:"flex",flexDirection:"column",maxHeight:"70vh"}}>
             <div style={{padding:"12px 16px",borderBottom:"1px solid #2d3548",display:"flex",justifyContent:"space-between",alignItems:"center",background:"linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.1))",borderRadius:"16px 16px 0 0"}}>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
                 <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",animation:"orb 3s ease infinite",flexShrink:0}}>
@@ -1870,19 +2016,19 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                   </svg>
                 </div>
                 <div>
-                  <div style={{fontWeight:700,fontSize:13,color:"#e2e8f0"}}>MindRisk Coach</div>
+                  <div style={{fontWeight:700,fontSize:13,color:"#f0f4ff"}}>MindRisk Coach</div>
                   <div style={{color:B,fontSize:10,fontWeight:600}}>Claude AI ✦</div>
                 </div>
               </div>
-              <button onClick={()=>setAiOpen(false)} style={{background:"rgba(255,255,255,0.08)",color:"#6b7280",fontSize:16,padding:"4px 8px",borderRadius:6}}>×</button>
+              <button onClick={()=>setAiOpen(false)} style={{background:"rgba(255,255,255,0.08)",color:"#8b96b0",fontSize:16,padding:"4px 8px",borderRadius:6}}>×</button>
             </div>
             <div style={{flex:1,overflow:"auto",padding:12,display:"flex",flexDirection:"column",gap:8,minHeight:120}}>
               {aiMessages.length===0&&!aiLoading&&(
-                <div style={{color:"#6b7280",fontSize:12,textAlign:"center",padding:16}}>Tippe eine Frage – echte Claude KI antwortet!</div>
+                <div style={{color:"#8b96b0",fontSize:12,textAlign:"center",padding:16}}>Tippe eine Frage – echte Claude KI antwortet!</div>
               )}
               {aiMessages.map((m,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                  <div style={{maxWidth:"85%",padding:"8px 12px",borderRadius:m.role==="user"?"12px 12px 2px 12px":"12px 12px 12px 2px",background:m.role==="user"?"linear-gradient(135deg,"+B+","+P+")":"#0f1117",border:"1px solid "+(m.role==="user"?"transparent":"#2d3548"),fontSize:12,color:"#e2e8f0",lineHeight:1.5,whiteSpace:"pre-wrap"}}>
+                  <div style={{maxWidth:"85%",padding:"8px 12px",borderRadius:m.role==="user"?"12px 12px 2px 12px":"12px 12px 12px 2px",background:m.role==="user"?"linear-gradient(135deg,"+B+","+P+")":"#0d1825",border:"1px solid "+(m.role==="user"?"transparent":"#1e2d48"),fontSize:12,color:"#f0f4ff",lineHeight:1.5,whiteSpace:"pre-wrap"}}>
                     {m.content}
                   </div>
                 </div>
@@ -1906,13 +2052,13 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             <>
             {aiImagePreview&&<div style={{padding:"6px 12px",borderTop:"1px solid #2d3548",display:"flex",alignItems:"center",gap:8}}>
               <img src={aiImagePreview} alt="chart" style={{width:52,height:52,borderRadius:8,objectFit:"cover",border:"1px solid "+B+"44"}}/>
-              <div style={{fontSize:11,color:"#94a3b8",flex:1}}>📊 Chart wird mitgeschickt...</div>
+              <div style={{fontSize:11,color:"#a8b8d0",flex:1}}>📊 Chart wird mitgeschickt...</div>
               <button onClick={()=>{setAiImage(null);setAiImagePreview(null);}} style={{background:"none",color:"#ef4444",fontSize:18,padding:"2px 6px"}}>×</button>
             </div>}
             <div style={{padding:"8px 12px",borderTop:"1px solid #2d3548",display:"flex",gap:6,alignItems:"center"}}>
               <input type="file" id="chartUpload" accept="image/*" onChange={handleImageSelect} style={{display:"none"}}/>
               <button onClick={()=>document.getElementById("chartUpload").click()}
-                style={{background:"#1a1f2e",border:"1px solid #2d3548",color:"#94a3b8",padding:"7px 9px",borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}
+                style={{background:"#131d30",border:"1px solid #2d3548",color:"#a8b8d0",padding:"7px 9px",borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}
                 title="Chart Screenshot hochladen">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -1920,7 +2066,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 </svg>
               </button>
               <button onClick={startVoice}
-                style={{background:isRecording?"rgba(239,68,68,0.3)":"#1a1f2e",border:"1px solid "+(isRecording?"#ef4444":"#2d3548"),color:isRecording?"#ef4444":"#94a3b8",padding:"7px 9px",borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}
+                style={{background:isRecording?"rgba(239,68,68,0.3)":"#131d30",border:"1px solid "+(isRecording?"#ef4444":"#1e2d48"),color:isRecording?"#ef4444":"#a8b8d0",padding:"7px 9px",borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}
                 title="Spracheingabe">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -1933,7 +2079,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendAiMessage())}
                 placeholder={isRecording?"🎤 Höre zu...":"Frag deinen Coach..."}
                 rows={2}
-                style={{flex:1,fontSize:13,padding:"10px 14px",borderRadius:16,background:"#0f1117",border:"1px solid #2d3548",resize:"none",lineHeight:1.4,maxHeight:80,overflowY:"auto",color:"#e2e8f0",fontFamily:"inherit"}}/>
+                style={{flex:1,fontSize:13,padding:"10px 14px",borderRadius:16,background:"#0d1320",border:"1px solid #2d3548",resize:"none",lineHeight:1.4,maxHeight:80,overflowY:"auto",color:"#f0f4ff",fontFamily:"inherit"}}/>
               <button id="aiSendBtn" onClick={sendAiMessage} disabled={aiLoading||(!aiInput.trim()&&!aiImage)}
                 style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"8px 12px",borderRadius:20,fontSize:14,fontWeight:700,opacity:aiLoading||(!aiInput.trim()&&!aiImage)?0.4:1,flexShrink:0}}>→</button>
             </div>
