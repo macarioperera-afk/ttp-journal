@@ -646,9 +646,9 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       }
       let data;
       try{data=JSON.parse(rawText);}catch(e){
-        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
+               setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
         return;
-              }
+      }
       if(!data.message){
         setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
         return;
@@ -1105,11 +1105,6 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               );
             })()}
           </Card>
-        </div>}
-
-        {/* REGELN TAB */
-            </div>
-          </div>
         ):(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
@@ -1298,8 +1293,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                     ))}
                     <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
                   </div>
-                                  </div>
-              );
+                </div>
+                              );
             })()}
           </Card>}
 
