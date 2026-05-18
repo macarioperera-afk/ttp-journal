@@ -790,21 +790,21 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 const myH=new Date().getHours();const myM=new Date().getMinutes();
                 const myWindow=(myH===16&&myM>=15)||(myH===17&&myM<=30);
                 return(
-                  <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <span style={{color:"#4b5563",fontSize:8}}>LON</span>
-                      <span style={{color:lonOpen?G:"#4b5563",fontWeight:700,fontSize:10}}>{lonTime}</span>
-                      <div style={{width:6,height:6,borderRadius:"50%",background:lonOpen?G:"#374151",boxShadow:lonOpen?"0 0 4px "+G:"none"}}/>
+                  <div style={{display:"flex",flexDirection:"column",gap:isDesktop?6:3,alignItems:"flex-end"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{color:"#4b5563",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"London":"LON"}</span>
+                      <span style={{color:lonOpen?G:"#4b5563",fontWeight:700,fontSize:isDesktop?13:10}}>{lonTime}</span>
+                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:lonOpen?G:"#374151",boxShadow:lonOpen?"0 0 6px "+G:"none"}}/>
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <span style={{color:"#4b5563",fontSize:8}}>CHI</span>
-                      <span style={{color:myWindow?G:chiOpen?Y:"#4b5563",fontWeight:700,fontSize:10}}>{chiTime}</span>
-                      <div style={{width:6,height:6,borderRadius:"50%",background:myWindow?G:chiOpen?Y:"#374151",boxShadow:myWindow?"0 0 4px "+G:chiOpen?"0 0 4px "+Y:"none"}}/>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{color:"#4b5563",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"Chicago":"CHI"}</span>
+                      <span style={{color:myWindow?G:chiOpen?Y:"#4b5563",fontWeight:700,fontSize:isDesktop?13:10}}>{chiTime}</span>
+                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:myWindow?G:chiOpen?Y:"#374151",boxShadow:myWindow?"0 0 6px "+G:chiOpen?"0 0 6px "+Y:"none"}}/>
                     </div>
-                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <span style={{color:"#4b5563",fontSize:8}}>TYO</span>
-                      <span style={{color:tokyoOpen?G:"#4b5563",fontWeight:700,fontSize:10}}>{tokyoTime}</span>
-                      <div style={{width:6,height:6,borderRadius:"50%",background:tokyoOpen?G:"#374151",boxShadow:tokyoOpen?"0 0 4px "+G:"none"}}/>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{color:"#4b5563",fontSize:isDesktop?11:8,fontWeight:isDesktop?600:400}}>{isDesktop?"Tokyo":"TYO"}</span>
+                      <span style={{color:tokyoOpen?G:"#4b5563",fontWeight:700,fontSize:isDesktop?13:10}}>{tokyoTime}</span>
+                      <div style={{width:isDesktop?8:6,height:isDesktop?8:6,borderRadius:"50%",background:tokyoOpen?G:"#374151",boxShadow:tokyoOpen?"0 0 6px "+G:"none"}}/>
                     </div>
                   </div>
                 );
@@ -928,9 +928,9 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                   <div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div>
                 </div>
               </div>
-              <span style={{color:"#6366f1",fontSize:11,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</span>
+              {!isDesktop&&<span style={{color:"#6366f1",fontSize:11,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</span>}
             </div>
-            {!profExpanded&&profitPlan&&<div style={{display:"flex",gap:8,marginBottom:2}}>
+            {!profExpanded&&!isDesktop&&profitPlan&&<div style={{display:"flex",gap:8,marginBottom:2}}>
               <div style={{background:"#0a0b16",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
                 <div style={{color:"#4b5563",fontSize:8}}>EV / TAG</div>
                 <div style={{color:profitPlan.dailyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.dailyEV>=0?"+":""}${profitPlan.dailyEV}</div>
@@ -955,7 +955,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                 </div>
               ))}
             </div>
-            {profExpanded&&(()=>{
+            {(profExpanded||isDesktop)&&(()=>{
               const wr=profitPlan.wr/100;
               const slT=40,tpT=80,slD=20,tpD=40,crv=2;
               const evT=Math.round(wr*tpD-(1-wr)*slD);
@@ -1064,7 +1064,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
                       <div style={{height:"100%",borderRadius:3,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
                     </div>
                   </div>
-                  {monatExp&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e1428"}}>
+                  {(monatExp||isDesktop)&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e1428"}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
                       {[
                         {l:"HANDELSTAGE NOCH",v:dLeft2+" Tage",c:dLeft2>5?G:dLeft2>2?Y:R,s:"diesen Monat"},
