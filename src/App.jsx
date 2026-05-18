@@ -1381,13 +1381,11 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               );
             })()}
           </Card>
-        </div>}
-
-        {/* REGELN TAB */
           </div>
         ))}
 
-                {tab==="check"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"minmax(400px,500px) 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
+        {/* REGELN TAB */}
+        {tab==="check"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"minmax(400px,500px) 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
           {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:12,padding:"12px 16px",display:"flex",gap:12,alignItems:"center"}}>
             <span style={{fontSize:24}}>⏸</span>
             <div><div style={{color:Y,fontWeight:800,fontSize:14}}>Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:38,letterSpacing:2,lineHeight:1}}>{pStr}</div></div>
