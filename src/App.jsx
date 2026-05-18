@@ -211,7 +211,9 @@ export default function App(){
   const[saldo,setSaldo]=useState(()=>parseFloat(localStorage.getItem('ttp_saldo')||'50433.22'));
   const[lastTradeAt,setLastTradeAt]=useState(null);
   const[tick,setTick]=useState(0);
-  const isDesktop=typeof window!=="undefined"&&window.innerWidth>=768;
+  const[screenW,setScreenW]=useState(typeof window!=="undefined"?window.innerWidth:520);
+  useEffect(()=>{const h=()=>setScreenW(window.innerWidth);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);
+  const isDesktop=screenW>=800;
 
   useEffect(()=>{const id=setInterval(()=>setTick(t=>t+1),1000);return()=>clearInterval(id);},[]);
 
@@ -550,8 +552,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
     };
     rec.onerror=(e)=>{
       setIsRecording(false);
-      if(e.error==="not-allowed")showToast("Mikrofon-Zugriff verweigert – Einstellungen prüfen");
-            else if(e.error==="no-speech")showToast("Nichts gehört – nochmal versuchen");
+            if(e.error==="not-allowed")showToast("Mikrofon-Zugriff verweigert – Einstellungen prüfen");
+      else if(e.error==="no-speech")showToast("Nichts gehört – nochmal versuchen");
       else showToast("Sprachfehler: "+e.error);
     };
   };
@@ -773,7 +775,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       </div>}
 
       {/* HEADER */}
-      <div style={{background:"linear-gradient(180deg,#1a1f2e 0%,#161b27 100%)",borderBottom:"1px solid #2d3548",padding:isDesktop?"16px 32px 14px":"14px 18px 12px",width:"100%"}}>
+      <div style={{background:"linear-gradient(180deg,#1a1f2e 0%,#161b27 100%)",borderBottom:"1px solid #2d3548",padding:isDesktop?"16px 32px 14px":"14px 18px 12px",width:"100%",boxSizing:"border-box"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{flex:1}}>
             <div style={{fontWeight:900,fontSize:30,letterSpacing:"-1.5px",lineHeight:1}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
@@ -826,7 +828,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>
       </div>}
 
-      <div className="mr-content">
+      <div style={{padding:isDesktop?"20px 28px 30px":"16px 16px 20px",width:"100%",boxSizing:"border-box",maxWidth:"100%"}}>
 
         {/* DASHBOARD */}
         {tab==="dash"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"minmax(380px,420px) 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
@@ -1442,7 +1444,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       </div>
 
       {/* BOTTOM NAV */}
-      <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,width:"100vw",background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:isDesktop?"0":"env(safe-area-inset-bottom,8px)"}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,width:"100%",background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:isDesktop?"0":"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
           <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:P+"aa",padding:isDesktop?"14px 8px 14px":"10px 2px 11px",fontSize:isDesktop?10:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:isDesktop?6:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
             <div style={{width:isDesktop?28:22,height:isDesktop?28:22,display:"flex",alignItems:"center",justifyContent:"center",opacity:tab===nav.k?1:0.55,transform:tab===nav.k?"scale(1.1)":"scale(1)",transition:"all 0.2s"}}>
