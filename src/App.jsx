@@ -575,7 +575,37 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
     reader.readAsDataURL(file);
   };
 
-  const analyzeProblems=async()=>{
+  const importTTPTrades=(raw)=>{
+  const lines=raw.trim().split('\n').filter(l=>l.trim());
+  const parsed=[];
+  for(const line of lines){
+    const parts=line.split('\t').map(s=>s.trim());
+    if(parts.length<8)continue;
+    const contract=parts[0].includes('MNQ')?'MNQ':'NQ';
+    const entryDT=parts[1]; // "18.5.2026, 16:54:51"
+    const pnlStr=parts[7].replace('$','').replace(',','.');
+    const pnl=parseFloat(pnlStr);
+    if(isNaN(pnl))continue;
+    // Parse date: "18.5.2026, 16:54:51" -> "2026-05-18" + "16:54"
+    const dtMatch=entryDT.match(/(\d+)\.(\d+)\.(\d+),\s*(\d+):(\d+)/);
+    if(!dtMatch)continue;
+    const [,day,month,year,hour,min]=dtMatch;
+    const date=year+'-'+month.padStart(2,'0')+'-'+day.padStart(2,'0');
+    const time=hour+':'+min;
+    const qty=parseInt(parts[6])||1;
+    const dir=qty>0?'LONG':'SHORT';
+    parsed.push({id:uid(),acct:'09',contract,date,time,pnl,dur:0,dir,setup:'Import TTP',notes:'',rules:{r1:true,r2:true,r3:true,r4:true,r5:true,r6:true}});
+  }
+  if(!parsed.length){alert('Keine Trades gefunden. Bitte TTP Export einfügen.');return;}
+  if(!window.confirm('Import: '+parsed.length+' Trades einfügen? Das aktualisiert auch den Saldo.')){return;}
+  setTrades(p=>{const u=[...p,...parsed];localStorage.setItem('ttp_trades',JSON.stringify(u));return u;});
+  const totalPnl=parsed.reduce((s,t)=>s+t.pnl,0);
+  const newSaldo=Math.round((saldo+totalPnl)*100)/100;
+  setSaldo(newSaldo);localStorage.setItem('ttp_saldo',newSaldo);
+  showToast(parsed.length+' Trades importiert! P&L: '+(totalPnl>=0?'+':'')+'$'+Math.round(totalPnl));
+};
+
+const analyzeProblems=async()=>{
   const selected=Object.keys(problems).filter(k=>problems[k]);
   if(!selected.length){alert("Bitte mindestens ein Problem auswählen!");return;}
   setProbAnalysisLoading(true);
@@ -678,7 +708,7 @@ const sendAiMessage=async()=>{
   };
 
   const addTrade=()=>{
-    if(!form.pnl){showToast("Bitte P&L eingeben");return;}
+        if(!form.pnl){showToast("Bitte P&L eingeben");return;}
     const v=parseFloat(form.pnl);
     if(isNaN(v)){showToast("P&L muss eine Zahl sein");return;}
     const newT={id:uid(),acct:"09",contract:form.contract,date:form.date,time:form.time,pnl:v,dur:0,dir:form.dir,setup:form.setup,notes:form.notes,rules:{...form.rules}};
@@ -695,7 +725,7 @@ const sendAiMessage=async()=>{
   };
 
   const renderCal=()=>{
-        const y=now.getFullYear(),mo=now.getMonth();
+    const y=now.getFullYear(),mo=now.getMonth();
     const fd2=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate();
     const cells=[];
     for(let i=0;i<(fd2||7)-1;i++)cells.push(<div key={"e"+i}/>);
@@ -1388,11 +1418,11 @@ const sendAiMessage=async()=>{
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
-                <div>
+                                <div>
                   <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Mein Monatsziel</div>
                   <div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div>
                 </div>
-                              </div>
+              </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 <button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"22",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️</button>
                 <span style={{color:P,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span>
@@ -1810,6 +1840,15 @@ const sendAiMessage=async()=>{
         </div>}
 
         {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10,width:"100%"}}>
+          <Card style={{borderColor:"rgba(99,102,241,0.3)"}}>
+            <div style={{fontWeight:700,fontSize:14,color:"#f0f4ff",marginBottom:8}}>📥 TTP Trade Import</div>
+            <div style={{color:"#8b96b0",fontSize:11,marginBottom:8}}>TTP Report → Trades markieren → Kopieren → hier einfügen:</div>
+            <textarea id="ttp_import_box" rows={4} placeholder="NQ-202606-CME&#9;18.5.2026, 16:54:51&#9;..." style={{width:"100%",fontSize:10,marginBottom:8,fontFamily:"monospace",resize:"vertical"}}/>
+            <button onClick={()=>{const v=document.getElementById('ttp_import_box').value;importTTPTrades(v);document.getElementById('ttp_import_box').value='';}}
+              style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"10px",width:"100%",fontWeight:700,borderRadius:10,fontSize:13}}>
+              📥 Trades importieren
+            </button>
+          </Card>
           <Card>
             <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>🔍 Filter</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
@@ -2090,3 +2129,5 @@ const sendAiMessage=async()=>{
     </div>
   );
 }
+
+    
