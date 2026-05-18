@@ -549,10 +549,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       });
     };
     rec.onerror=(e)=>{
-          setIsRecording(false);
+      setIsRecording(false);
       if(e.error==="not-allowed")showToast("Mikrofon-Zugriff verweigert – Einstellungen prüfen");
       else if(e.error==="no-speech")showToast("Nichts gehört – nochmal versuchen");
-      else showToast("Sprachfehler: "+e.error);
+            else showToast("Sprachfehler: "+e.error);
     };
   };
 
@@ -731,8 +731,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         .mr-content{padding:16px 16px 20px;max-width:520px;margin:0 auto}
         .mr-nav{max-width:520px;margin:0 auto}
         @media(min-width:800px){
-          .mr-content{max-width:820px;padding:20px 24px 30px}
-          .mr-nav{max-width:820px}
+          .mr-content{max-width:960px;padding:20px 32px 30px}
+          .mr-nav{max-width:960px}
         }
         @keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes livingOrb{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.55),0 0 40px rgba(168,85,247,0.35),0 0 70px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.85),0 0 65px rgba(168,85,247,0.55),0 0 100px rgba(99,102,241,0.3)}}@keyframes orbRing1{0%{transform:scale(1);opacity:0.8}100%{transform:scale(2.5);opacity:0}}@keyframes orbRing2{0%{transform:scale(1);opacity:0.6}100%{transform:scale(3);opacity:0}}@keyframes orbRing3{0%{transform:scale(1);opacity:0.4}100%{transform:scale(3.8);opacity:0}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.55;transform:translate(-50%,-50%) scale(0.85)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}}@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.5),0 0 40px rgba(168,85,247,0.3),0 0 60px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.8),0 0 60px rgba(168,85,247,0.5),0 0 90px rgba(99,102,241,0.25)}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.6;transform:translate(-50%,-50%) scale(0.8)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}}
         @keyframes spin{to{transform:rotate(360deg)}}
@@ -742,6 +742,14 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         @keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,0.5)}50%{box-shadow:0 0 0 12px rgba(99,102,241,0)}}
         @keyframes orb{0%,100%{transform:scale(1);box-shadow:0 0 20px rgba(99,102,241,0.6),0 0 40px rgba(168,85,247,0.3)}50%{transform:scale(1.05);box-shadow:0 0 30px rgba(99,102,241,0.9),0 0 60px rgba(168,85,247,0.5)}}
         @keyframes ring{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        @keyframes watchDots{
+          0%,100%{box-shadow:0 -5px 0 1.5px rgba(99,102,241,0.7),3.5px -3.5px 0 1.5px rgba(99,102,241,0.6),5px 0 0 1.5px rgba(99,102,241,0.5),3.5px 3.5px 0 1.5px rgba(99,102,241,0.6),0 5px 0 1.5px rgba(99,102,241,0.7),-3.5px 3.5px 0 1.5px rgba(99,102,241,0.6),-5px 0 0 1.5px rgba(99,102,241,0.5),-3.5px -3.5px 0 1.5px rgba(99,102,241,0.6)}
+          50%{box-shadow:0 -8px 0 2px rgba(99,102,241,1),5.6px -5.6px 0 2px rgba(99,102,241,0.9),8px 0 0 2px rgba(99,102,241,0.8),5.6px 5.6px 0 2px rgba(99,102,241,0.9),0 8px 0 2px rgba(99,102,241,1),-5.6px 5.6px 0 2px rgba(99,102,241,0.9),-8px 0 0 2px rgba(99,102,241,0.8),-5.6px -5.6px 0 2px rgba(99,102,241,0.9)}
+        }
+        @keyframes watchDotsPurple{
+          0%,100%{box-shadow:0 -5px 0 1.5px rgba(168,85,247,0.7),3.5px -3.5px 0 1.5px rgba(168,85,247,0.6),5px 0 0 1.5px rgba(168,85,247,0.5),3.5px 3.5px 0 1.5px rgba(168,85,247,0.6),0 5px 0 1.5px rgba(168,85,247,0.7),-3.5px 3.5px 0 1.5px rgba(168,85,247,0.6),-5px 0 0 1.5px rgba(168,85,247,0.5),-3.5px -3.5px 0 1.5px rgba(168,85,247,0.6)}
+          50%{box-shadow:0 -8px 0 2px rgba(168,85,247,1),5.6px -5.6px 0 2px rgba(168,85,247,0.9),8px 0 0 2px rgba(168,85,247,0.8),5.6px 5.6px 0 2px rgba(168,85,247,0.9),0 8px 0 2px rgba(168,85,247,1),-5.6px 5.6px 0 2px rgba(168,85,247,0.9),-8px 0 0 2px rgba(168,85,247,0.8),-5.6px -5.6px 0 2px rgba(168,85,247,0.9)}
+        }
         @media(min-width:768px){
           .mr-content{max-width:900px;padding:20px 24px 30px}
           .mr-nav{max-width:900px}
@@ -823,8 +831,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       <div className="mr-content">
 
         {/* DASHBOARD */}
-        {tab==="dash"&&<div style={{columns:isDesktop?"2":"1",columnGap:16,display:isDesktop?"block":"flex",flexDirection:"column",gap:isDesktop?0:12}}>
-          {todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center"}}>
+        {tab==="dash"&&<div style={{display:"grid",gridTemplateColumns:isDesktop?"1fr 1fr":"1fr",gap:12,alignItems:"start"}}>
+          {todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
             <span style={{fontSize:22}}>🚫</span>
             <div><div style={{color:R,fontWeight:700,fontSize:13}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11}}>Morgen wieder. Heute: analysieren.</div></div>
           </div>}
@@ -902,7 +910,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             ))}
           </div>
 
-          <Card>
+          <Card style={{breakInside:"avoid"}}>
             <div style={{fontWeight:700,marginBottom:10,fontSize:15}}>{now.toLocaleString("de-DE",{month:"long",year:"numeric"})}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>
               {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#6b7280",fontSize:10,fontWeight:600}}>{d}</div>)}
@@ -914,7 +922,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           {profitPlan&&<Card style={{borderColor:"#6366f133",background:"linear-gradient(135deg,#0a0b12,#0f1117)"}} onClick={()=>setProfExpanded(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle at 35% 35%,#c4b5fd,#7c3aed 60%,#4c1d95)",animation:"livingOrb 2.2s ease-in-out infinite",boxShadow:"0 0 10px rgba(99,102,241,0.7)",flexShrink:0}}/>
+                <div style={{width:4,height:4,borderRadius:"50%",background:"#6366f1",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDots 2.5s ease-in-out infinite",boxShadow:"0 0 4px rgba(99,102,241,0.8)"}}/>
                 <div>
                   <div style={{fontWeight:800,fontSize:15,color:"#e2e8f0"}}>Weg zur Profitabilität</div>
                   <div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div>
@@ -1013,7 +1021,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           <Card style={{borderColor:P+"33",background:"#0d0a14"}} onClick={()=>setMonatExp(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle at 35% 35%,#e9d5ff,#a855f7 60%,#581c87)",animation:"livingOrb 2.2s ease-in-out infinite 0.5s",boxShadow:"0 0 10px rgba(168,85,247,0.6)",flexShrink:0}}/>
+                <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
                 <div>
                   <div style={{fontWeight:800,fontSize:15,color:"#e2e8f0"}}>Mein Monatsziel</div>
                   <div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div>
@@ -1089,7 +1097,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>}
 
         {/* REGELN TAB */}
-        {tab==="check"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {tab==="check"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"1fr 1fr":"none",flexDirection:"column",gap:12,alignItems:"start"}}>
           {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:12,padding:"12px 16px",display:"flex",gap:12,alignItems:"center"}}>
             <span style={{fontSize:24}}>⏸</span>
             <div><div style={{color:Y,fontWeight:800,fontSize:14}}>Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:38,letterSpacing:2,lineHeight:1}}>{pStr}</div></div>
@@ -1098,9 +1106,9 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           {atLimit&&!overtradingToday&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:10,padding:"10px 14px",display:"flex",gap:10}}><span>🛑</span><div style={{color:O,fontWeight:800}}>2 Trades – Tageslimit!</div></div>}
           <Card style={{borderColor:now.getHours()>=16?G+"44":Y+"44"}}>
             <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>Zeitfenster</div>
-            <div style={{color:now.getHours()>=16?G:Y,fontSize:24,fontWeight:800}}>{now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr</div>
+                        <div style={{color:now.getHours()>=16?G:Y,fontSize:24,fontWeight:800}}>{now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr</div>
             <div style={{color:"#6b7280",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Warte auf 16:15 Uhr"}</div>
-                      </Card>
+          </Card>
           {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card>
             <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>✅ Pre-Trade Checkliste</div>
             <div style={{color:"#6b7280",fontSize:11,marginBottom:12}}>Alle 4 Punkte abhaken vor dem Trade</div>
@@ -1122,7 +1130,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>}
 
         {/* LOGGEN TAB */}
-        {tab==="log"&&<div>
+        {tab==="log"&&<div style={{maxWidth:isDesktop?"600px":"100%",margin:isDesktop?"0 auto":"0"}}>
           {!allChecked&&!inPause&&!todayBlocked&&!atLimit&&<div style={{background:"linear-gradient(135deg,rgba(239,68,68,0.12),rgba(245,158,11,0.08))",border:"2px solid rgba(239,68,68,0.5)",borderRadius:14,padding:"18px",marginBottom:14,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:8}}>🔒</div>
             <div style={{color:R,fontWeight:800,fontSize:16,marginBottom:6}}>Routine zuerst!</div>
@@ -1188,7 +1196,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>}
 
         {/* ANALYSE TAB */}
-        {tab==="analyse"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {tab==="analyse"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"1fr 1fr":"none",flexDirection:"column",gap:12,alignItems:"start"}}>
 
           {/* SCHNELL-STATS */}
           {(()=>{
@@ -1370,7 +1378,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           </Card>
         </div>}
 
-        {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:isDesktop?"780px":"100%",margin:isDesktop?"0 auto":"0"}}>
           <Card>
             <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>🔍 Filter</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
@@ -1436,7 +1444,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       </div>
 
       {/* BOTTOM NAV */}
-      <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(26,31,46,0.95)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",borderTop:"1px solid #2d3548",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
+      <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
           <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:P+"aa",padding:"10px 2px 11px",fontSize:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
             <div style={{width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",opacity:tab===nav.k?1:0.55,transform:tab===nav.k?"scale(1.1)":"scale(1)",transition:"all 0.2s"}}>
