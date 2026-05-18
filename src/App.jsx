@@ -551,8 +551,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
     rec.onerror=(e)=>{
       setIsRecording(false);
       if(e.error==="not-allowed")showToast("Mikrofon-Zugriff verweigert – Einstellungen prüfen");
-      else if(e.error==="no-speech")showToast("Nichts gehört – nochmal versuchen");
-            else showToast("Sprachfehler: "+e.error);
+            else if(e.error==="no-speech")showToast("Nichts gehört – nochmal versuchen");
+      else showToast("Sprachfehler: "+e.error);
     };
   };
 
@@ -714,7 +714,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 ];
 
   return(
-    <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:14,paddingBottom:isDesktop?"80px":"calc(80px + env(safe-area-inset-bottom,0px))"}}>
+    <div style={{background:"#0f1117",minHeight:"100vh",color:"#e2e8f0",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:isDesktop?15:14,paddingBottom:isDesktop?"80px":"calc(80px + env(safe-area-inset-bottom,0px))",width:"100%",overflowX:"hidden"}}>
       {showSplash&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"radial-gradient(circle at center,#1a1f2e 0%,#0f1117 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",animation:"fadeOut 0.4s ease 1.4s forwards"}}>
         <div style={{fontSize:42,fontWeight:900,letterSpacing:"-2px",marginBottom:8}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
         <div style={{fontSize:11,color:"#6b7280",letterSpacing:"3px",marginBottom:32}}>TRADING JOURNAL</div>
@@ -773,8 +773,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       </div>}
 
       {/* HEADER */}
-      <div style={{background:"linear-gradient(180deg,#1a1f2e 0%,#161b27 100%)",borderBottom:"1px solid #2d3548",padding:isDesktop?"16px 32px 14px":"14px 18px 12px"}}>
-        <div style={{maxWidth:"100%"}}>
+      <div style={{background:"linear-gradient(180deg,#1a1f2e 0%,#161b27 100%)",borderBottom:"1px solid #2d3548",padding:isDesktop?"16px 32px 14px":"14px 18px 12px",width:"100%"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{flex:1}}>
             <div style={{fontWeight:900,fontSize:30,letterSpacing:"-1.5px",lineHeight:1}}><span style={{color:B}}>Mind</span><span style={{color:"#e2e8f0"}}>Risk</span></div>
@@ -819,8 +818,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>
       </div>
 
-      </div>
-        {inPause&&<div style={{position:"sticky",top:0,zIndex:90,background:"linear-gradient(135deg,#f59e0b,#ef4444)",padding:"10px 16px",display:"flex",alignItems:"center",gap:10}}>
+      {inPause&&<div style={{position:"sticky",top:0,zIndex:90,background:"linear-gradient(135deg,#f59e0b,#ef4444)",padding:"10px 16px",display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:18}}>⏸</span>
         <div style={{flex:1}}>
           <div style={{fontWeight:800,fontSize:13,color:"#fff"}}>PFLICHTPAUSE – {pStr}</div>
@@ -831,7 +829,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       <div className="mr-content">
 
         {/* DASHBOARD */}
-        {tab==="dash"&&<div style={{display:"grid",gridTemplateColumns:isDesktop?"420px 1fr":"1fr",gap:isDesktop?20:12,alignItems:"start"}}>
+        {tab==="dash"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"minmax(380px,420px) 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
           {todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
             <span style={{fontSize:22}}>🚫</span>
             <div><div style={{color:R,fontWeight:700,fontSize:13}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11}}>Morgen wieder. Heute: analysieren.</div></div>
@@ -910,10 +908,10 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
             ))}
           </div>
 
-          <Card style={{breakInside:"avoid"}}>
-            <div style={{fontWeight:700,marginBottom:10,fontSize:15}}>{now.toLocaleString("de-DE",{month:"long",year:"numeric"})}</div>
+          <Card style={{breakInside:"avoid",height:isDesktop?"auto":"auto"}}>
+            <div style={{fontWeight:isDesktop?800:700,marginBottom:isDesktop?14:10,fontSize:isDesktop?18:15}}>{now.toLocaleString("de-DE",{month:"long",year:"numeric"})}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>
-              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#6b7280",fontSize:10,fontWeight:600}}>{d}</div>)}
+              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#6b7280",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isDesktop?6:3}}>{renderCal()}</div>
           </Card>
@@ -1097,7 +1095,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>}
 
         {/* REGELN TAB */}
-        {tab==="check"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"500px 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start"}}>
+        {tab==="check"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"minmax(400px,500px) 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
           {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:12,padding:"12px 16px",display:"flex",gap:12,alignItems:"center"}}>
             <span style={{fontSize:24}}>⏸</span>
             <div><div style={{color:Y,fontWeight:800,fontSize:14}}>Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:38,letterSpacing:2,lineHeight:1}}>{pStr}</div></div>
@@ -1196,7 +1194,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         </div>}
 
         {/* ANALYSE TAB */}
-        {tab==="analyse"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"1fr 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start"}}>
+        {tab==="analyse"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"1fr 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
 
           {/* SCHNELL-STATS */}
           {(()=>{
@@ -1378,7 +1376,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
           </Card>
         </div>}
 
-        {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:isDesktop?"780px":"100%",margin:isDesktop?"0 auto":"0"}}>
+        {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10,width:"100%"}}>
           <Card>
             <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>🔍 Filter</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
@@ -1444,7 +1442,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       </div>
 
       {/* BOTTOM NAV */}
-      <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
+      <div className="mr-nav" style={{position:"fixed",bottom:0,left:0,right:0,width:"100vw",background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:isDesktop?"0":"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
           <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:P+"aa",padding:isDesktop?"14px 8px 14px":"10px 2px 11px",fontSize:isDesktop?10:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:isDesktop?6:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
             <div style={{width:isDesktop?28:22,height:isDesktop?28:22,display:"flex",alignItems:"center",justifyContent:"center",opacity:tab===nav.k?1:0.55,transform:tab===nav.k?"scale(1.1)":"scale(1)",transition:"all 0.2s"}}>
