@@ -646,8 +646,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       }
       let data;
       try{data=JSON.parse(rawText);}catch(e){
-               setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
-        return;
+        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
+                return;
       }
       if(!data.message){
         setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
@@ -1105,6 +1105,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
               );
             })()}
           </Card>
+            </div>
+          </div>
         ):(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
