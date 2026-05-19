@@ -729,9 +729,8 @@ const sendAiMessage=async()=>{
       );
       if(isKeyInsight){
         const short=msg.replace(/[🔴✅⚠️📌💡🎯]/g,'').slice(0,120).trim();
-        saveCoachMemory("💬 "+short);
-      }
-          }catch(err){
+        saveCoachMemory("💬 "+short);      }
+    }catch(err){
       setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Netzwerk Fehler: "+err.message}]);
     }finally{setAiLoading(false);}
   };
@@ -1461,10 +1460,9 @@ const sendAiMessage=async()=>{
                       profitPlan.overtradeDays>5&&"⚠️ "+profitPlan.overtradeDays+" Overtrading-Tage destroyen deinen EV. Strikt max "+DAILY_LIMIT+" Trades/Tag.",
                       evT>0&&"✅ Positive Edge vorhanden. Mit Disziplin wirst du langfristig profitabel.",
                       evT<=0&&"🔴 Negativer EV – Verluste übersteigen Gewinne statistisch. Setup oder Disziplin optimieren.",
-                    ].filter(Boolean).map((t,i)=>(
-                      <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
+                    ].filter(Boolean).map((t,i)=>(                      <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
                     ))}
-                                        <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
+                    <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
                   </div>
                 </div>
               );
@@ -1973,7 +1971,6 @@ const sendAiMessage=async()=>{
       </div>
 
       {/* BOTTOM NAV */}
-      </div>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:"rgba(15,10,30,0.97)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15)",display:"flex",paddingBottom:"env(safe-area-inset-bottom,8px)",WebkitTransform:"translate3d(0,0,0)",transform:"translate3d(0,0,0)"}}>        {NAVS.map(nav=>(
           <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:P+"aa",padding:isDesktop?"14px 8px 14px":"10px 2px 11px",fontSize:isDesktop?10:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:isDesktop?6:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
             <div style={{width:isDesktop?28:22,height:isDesktop?28:22,display:"flex",alignItems:"center",justifyContent:"center",opacity:tab===nav.k?1:0.55,transform:tab===nav.k?"scale(1.1)":"scale(1)",transition:"all 0.2s"}}>
