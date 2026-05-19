@@ -721,14 +721,14 @@ const sendAiMessage=async()=>{
         return updated;
       });
       // Auto-extract important insights for coach memory
-        const msg=data.message;
+      const msg=data.message;
       if(msg.includes("📌")||msg.includes("Wichtig:")||msg.includes("Merke:"))
         saveCoachMemory("Auto: "+msg.slice(0,100));
     }catch(err){
       setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Netzwerk Fehler: "+err.message}]);
     }finally{setAiLoading(false);}
   };
-
+  
   const addTrade=()=>{
     if(!form.pnl){showToast("Bitte P&L eingeben");return;}
     const v=parseFloat(form.pnl);
@@ -904,6 +904,17 @@ const sendAiMessage=async()=>{
         {tab==="dash"&&(isDesktop?(
           <div style={{display:"flex",gap:20,width:"100%",alignItems:"start"}}>
             <div style={{flex:"0 0 48%",display:"flex",flexDirection:"column",gap:16}}>
+          {/* NEUE CHALLENGE BANNER */}
+          {saldo<49000&&<div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(168,85,247,0.15))",border:"2px solid rgba(99,102,241,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
+            <div>
+              <div style={{color:"#f0f4ff",fontWeight:800,fontSize:14}}>🚀 Neue Challenge starten?</div>
+              <div style={{color:"#8b96b0",fontSize:11}}>Saldo auf $50.000 setzen · Max DD $2.000</div>
+            </div>
+            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo","50000");setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level","48000");showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
+              style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"8px 16px",borderRadius:10,fontWeight:800,fontSize:13,flexShrink:0}}>
+              Starten
+            </button>
+          </div>}
 
           {dailyDDHit&&<div style={{background:"rgba(239,68,68,0.15)",border:"2px solid rgba(239,68,68,0.6)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
             <span style={{fontSize:22}}>🛑</span>
@@ -930,6 +941,17 @@ const sendAiMessage=async()=>{
           </div>}
 
 
+          {/* NEUE CHALLENGE BANNER */}
+          {saldo<49000&&<div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(168,85,247,0.15))",border:"2px solid rgba(99,102,241,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
+            <div>
+              <div style={{color:"#f0f4ff",fontWeight:800,fontSize:14}}>🚀 Neue Challenge starten?</div>
+              <div style={{color:"#8b96b0",fontSize:11}}>Saldo auf $50.000 setzen · Max DD $2.000</div>
+            </div>
+            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo","50000");setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level","48000");showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
+              style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"8px 16px",borderRadius:10,fontWeight:800,fontSize:13,flexShrink:0}}>
+              Starten
+            </button>
+          </div>}
           <Card style={{borderColor:B+"44"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
               <div>
@@ -1436,7 +1458,7 @@ const sendAiMessage=async()=>{
                       <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
                     ))}
                     <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
-                  </div>
+                                      </div>
                 </div>
               );
             })()}
@@ -1444,7 +1466,7 @@ const sendAiMessage=async()=>{
 
 
           {/* MEIN MONATSZIEL */}
-                      <Card style={{borderColor:P+"33",background:"#0d0a14"}} onClick={()=>setMonatExp(p=>!p)}>
+          <Card style={{borderColor:P+"33",background:"#0d0a14"}} onClick={()=>setMonatExp(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
