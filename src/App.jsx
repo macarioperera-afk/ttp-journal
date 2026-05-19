@@ -718,10 +718,10 @@ const sendAiMessage=async()=>{
         // Save last 50 messages to localStorage for memory
         const forStorage=updated.slice(-50).map(m=>({role:m.role,content:m.content.slice(0,500),ts:m.ts}));
         localStorage.setItem('ttp_chat_history',JSON.stringify(forStorage));
-                return updated;
+        return updated;
       });
       // Auto-extract important insights for coach memory
-      const msg=data.message;
+        const msg=data.message;
       if(msg.includes("📌")||msg.includes("Wichtig:")||msg.includes("Merke:"))
         saveCoachMemory("Auto: "+msg.slice(0,100));
     }catch(err){
@@ -1438,13 +1438,13 @@ const sendAiMessage=async()=>{
                     <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
                   </div>
                 </div>
-                              );
+              );
             })()}
           </Card>}
 
 
           {/* MEIN MONATSZIEL */}
-          <Card style={{borderColor:P+"33",background:"#0d0a14"}} onClick={()=>setMonatExp(p=>!p)}>
+                      <Card style={{borderColor:P+"33",background:"#0d0a14"}} onClick={()=>setMonatExp(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
@@ -2048,7 +2048,15 @@ const sendAiMessage=async()=>{
                     <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                   </Field>
                 </div>
-                <button onClick={()=>{if(window.confirm("Alle Daten loeschen?")){{localStorage.clear();window.location.reload();}}}} style={{marginTop:12,background:"rgba(239,68,68,0.08)",color:R,border:"1px solid rgba(239,68,68,0.2)",padding:"10px 14px",width:"100%",fontWeight:600,fontSize:12,borderRadius:10}}>Alle Daten löschen</button>
+                <button onClick={()=>{
+                if(window.confirm("Neue Challenge starten?\n\nSetzt:\n• Saldo auf $50.000\n• Max DD Level auf $48.000\n• Alle Trades bleiben erhalten")){
+                  setSaldo(50000);localStorage.setItem("ttp_saldo",50000);
+                  setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);
+                  showToast("✅ Neue Challenge gestartet! Viel Erfolg!");
+                  setSettingsOpen(false);
+                }
+              }} style={{marginBottom:8,background:"linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.1))",color:B,border:"1px solid rgba(99,102,241,0.3)",padding:"10px 14px",width:"100%",fontWeight:700,fontSize:13,borderRadius:10}}>🚀 Neue Challenge ($50.000)</button>
+              <button onClick={()=>{if(window.confirm("Alle Daten loeschen?")){{localStorage.clear();window.location.reload();}}}} style={{background:"rgba(239,68,68,0.08)",color:R,border:"1px solid rgba(239,68,68,0.2)",padding:"10px 14px",width:"100%",fontWeight:600,fontSize:12,borderRadius:10}}>Alle Daten löschen</button>
               </div>}
             </div>
           ))}
