@@ -161,7 +161,7 @@ export default function App(){
     try{
       const saved=JSON.parse(localStorage.getItem('ttp_chat_history')||'[]');
       if(saved.length>0) return saved.slice(-20); // Load last 20 messages
-    }catch{}
+    }catch(e){}
     return [];
   });
   const[aiInput,setAiInput]=useState("");
@@ -196,7 +196,7 @@ export default function App(){
   const saveSettings=(s)=>{setSettings(s);localStorage.setItem('ttp_settings',JSON.stringify(s));};
   const[profExpanded,setProfExpanded]=useState(false);
   const[monatExp,setMonatExp]=useState(false);
-  const[chatHistory,setChatHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_chat_history')||'[]');}catch{return[];}});
+  
   const[probExp,setProbExp]=useState(false);
   const[problems,setProblems]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_problems')||'{}');}catch{return{};}});
   const[probAnalysis,setProbAnalysis]=useState('');
@@ -277,6 +277,8 @@ export default function App(){
   const kontoabstand=Math.max(0,Math.round((saldo-maxDDLevel)*100)/100);
   const todT=t09.filter(t=>t.date===todayISO());
   const todPnl=Math.round(todT.reduce((s,t)=>s+t.pnl,0)*100)/100;
+  const dailyLoss=Math.abs(Math.min(0,todPnl));
+  const dailyDDHit=dailyLoss>=DAILY_DD_LIMIT;
   const tradeCount=todT.length;
   const atLimit=tradeCount>=DAILY_LIMIT;
   const overtradingToday=tradeCount>=OVERTRADING_AT;
@@ -716,9 +718,9 @@ const sendAiMessage=async()=>{
         // Save last 50 messages to localStorage for memory
         const forStorage=updated.slice(-50).map(m=>({role:m.role,content:m.content.slice(0,500),ts:m.ts}));
         localStorage.setItem('ttp_chat_history',JSON.stringify(forStorage));
-        return updated;
+                return updated;
       });
-            // Auto-extract important insights for coach memory
+      // Auto-extract important insights for coach memory
       const msg=data.message;
       if(msg.includes("📌")||msg.includes("Wichtig:")||msg.includes("Merke:"))
         saveCoachMemory("Auto: "+msg.slice(0,100));
@@ -1436,9 +1438,9 @@ const sendAiMessage=async()=>{
                     <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
                   </div>
                 </div>
-              );
+                              );
             })()}
-                      </Card>}
+          </Card>}
 
 
           {/* MEIN MONATSZIEL */}
