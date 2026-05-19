@@ -620,10 +620,11 @@ const analyzeProblems=async()=>{
   if(!selected.length){alert("Bitte mindestens ein Problem auswählen!");return;}
   setProbAnalysisLoading(true);
   try{
-    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:"Analysiere meine Trading-Probleme: "+selected.join(", ")+". Meine aktuellen Stats: WR "+Math.round(t09.filter(t=>t.pnl>0).length/(t09.length||1)*100)+"%, "+profitPlan?.overtradeDays+" Overtrading-Tage, Regelquote "+disc+"%. Gib mir einen konkreten 3-Schritte Plan für jedes Problem.",trades:t09.slice(-20),coachProfile,coachMemory,goals})});
+    const probMsg="Analysiere meine Trading-Probleme: "+selected.join(", ")+". Meine Stats: WR "+Math.round(t09.filter(t=>t.pnl>0).length/(t09.length||1)*100)+"%, "+profitPlan?.overtradeDays+" Overtrading-Tage, Regelquote "+disc+"%. Gib mir einen konkreten Plan für jedes Problem – was ich konkret täglich tun soll.";
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:[{role:"user",content:probMsg}],context:{coachProfile,coachMemory:coachMemory.slice(0,5).map(m=>m.date+': '+m.note).join('\n'),tradingStats:{winRate:Math.round(t09.filter(t=>t.pnl>0).length/(t09.length||1)*100),overtradingDays:profitPlan?.overtradeDays||0,disc}}})});
     const d=await r.json();
-    setProbAnalysis(d.content?.map(c=>c.text||'').join(''));
+    setProbAnalysis(d.message||'Fehler beim Laden der Analyse.');
   }catch(e){setProbAnalysis("Fehler: "+e.message);}
   setProbAnalysisLoading(false);
 };
@@ -715,20 +716,26 @@ const sendAiMessage=async()=>{
       const assistantMsg={role:"assistant",content:data.message,ts:new Date().toISOString()};
       setAiMessages(p=>{
         const updated=[...p,assistantMsg];
-        // Save last 50 messages to localStorage for memory
-        const forStorage=updated.slice(-50).map(m=>({role:m.role,content:m.content.slice(0,500),ts:m.ts}));
+        const forStorage=updated.slice(-80).map(m=>({role:m.role,content:m.content.slice(0,600),ts:m.ts||''}));
         localStorage.setItem('ttp_chat_history',JSON.stringify(forStorage));
         return updated;
       });
-      // Auto-extract important insights for coach memory
+      // Auto-save key insights (not every message, only meaningful ones)
       const msg=data.message;
-      if(msg.includes("📌")||msg.includes("Wichtig:")||msg.includes("Merke:"))
-        saveCoachMemory("Auto: "+msg.slice(0,100));
-    }catch(err){
+      const isKeyInsight=msg.length>80&&(
+        msg.includes("Problem")||msg.includes("Muster")||msg.includes("Stärke")||
+        msg.includes("solltest")||msg.includes("wichtig")||msg.includes("achte")||
+        msg.includes("morgen")||msg.includes("heute")
+      );
+      if(isKeyInsight){
+        const short=msg.replace(/[🔴✅⚠️📌💡🎯]/g,'').slice(0,120).trim();
+        saveCoachMemory("💬 "+short);
+      }
+          }catch(err){
       setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Netzwerk Fehler: "+err.message}]);
     }finally{setAiLoading(false);}
   };
-  
+
   const addTrade=()=>{
     if(!form.pnl){showToast("Bitte P&L eingeben");return;}
     const v=parseFloat(form.pnl);
@@ -905,12 +912,12 @@ const sendAiMessage=async()=>{
           <div style={{display:"flex",gap:20,width:"100%",alignItems:"start"}}>
             <div style={{flex:"0 0 48%",display:"flex",flexDirection:"column",gap:16}}>
           {/* NEUE CHALLENGE BANNER */}
-          {saldo<49000&&<div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(168,85,247,0.15))",border:"2px solid rgba(99,102,241,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
+          {saldo!==50000&&saldo<51500&&<div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(168,85,247,0.15))",border:"2px solid rgba(99,102,241,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
             <div>
               <div style={{color:"#f0f4ff",fontWeight:800,fontSize:14}}>🚀 Neue Challenge starten?</div>
               <div style={{color:"#8b96b0",fontSize:11}}>Saldo auf $50.000 setzen · Max DD $2.000</div>
             </div>
-            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo","50000");setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level","48000");showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
+            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo",50000);setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
               style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"8px 16px",borderRadius:10,fontWeight:800,fontSize:13,flexShrink:0}}>
               Starten
             </button>
@@ -942,12 +949,12 @@ const sendAiMessage=async()=>{
 
 
           {/* NEUE CHALLENGE BANNER */}
-          {saldo<49000&&<div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(168,85,247,0.15))",border:"2px solid rgba(99,102,241,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
+          {saldo!==50000&&saldo<51500&&<div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(168,85,247,0.15))",border:"2px solid rgba(99,102,241,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
             <div>
               <div style={{color:"#f0f4ff",fontWeight:800,fontSize:14}}>🚀 Neue Challenge starten?</div>
               <div style={{color:"#8b96b0",fontSize:11}}>Saldo auf $50.000 setzen · Max DD $2.000</div>
             </div>
-            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo","50000");setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level","48000");showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
+            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo",50000);setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
               style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"8px 16px",borderRadius:10,fontWeight:800,fontSize:13,flexShrink:0}}>
               Starten
             </button>
@@ -1457,8 +1464,8 @@ const sendAiMessage=async()=>{
                     ].filter(Boolean).map((t,i)=>(
                       <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
                     ))}
-                    <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
-                                      </div>
+                                        <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
+                  </div>
                 </div>
               );
             })()}
@@ -1966,7 +1973,7 @@ const sendAiMessage=async()=>{
       </div>
 
       {/* BOTTOM NAV */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,width:"100%",background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:isDesktop?"0":"env(safe-area-inset-bottom,8px)"}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,width:"100%",WebkitTransform:"translateZ(0)",transform:"translateZ(0)",willChange:"transform",background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:isDesktop?"0":"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
           <button key={nav.k} onClick={()=>setTab(nav.k)} style={{background:"none",color:tab===nav.k?B:P+"aa",padding:isDesktop?"14px 8px 14px":"10px 2px 11px",fontSize:isDesktop?10:8,flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:isDesktop?6:4,borderBottom:tab===nav.k?"2px solid "+B:"2px solid transparent",borderRadius:0,position:"relative",fontWeight:700,letterSpacing:"0.5px",transition:"color 0.2s"}}>
             <div style={{width:isDesktop?28:22,height:isDesktop?28:22,display:"flex",alignItems:"center",justifyContent:"center",opacity:tab===nav.k?1:0.55,transform:tab===nav.k?"scale(1.1)":"scale(1)",transition:"all 0.2s"}}>
