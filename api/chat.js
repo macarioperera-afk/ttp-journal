@@ -1,4 +1,4 @@
-           // ========================================
+// ========================================
 // MindRisk Trading Coach - Claude API Bridge
 // Vercel Serverless Function: /api/chat
 // VERSION 2 - Fix: höheres Token-Limit
@@ -112,13 +112,18 @@ DISZIPLIN-REGELN:
 
 KONTO:
 - TTP (The Trading Pit), Konto P1-235109
-- Instrument: MNQ Futures
+- NEUE CHALLENGE: $50.000 Start, Max DD $2.000, Daily DD Limit $1.000
+- Instrument: MNQ Futures (KEIN NQ!)
+- KRITISCH: Jeronimo hat durch NQ Overtrading 2 Tage in Folge alles verloren (22+ Trades/Tag). Klare Grenzen nötig.
 
 PERSÖNLICHES PROFIL (permanent gespeichert):
 ${ctx.coachProfile || 'Noch nicht eingerichtet – User soll Profil in Settings ausfüllen'}
 
 COACH GEDÄCHTNIS (aus vergangenen Sessions):
 ${ctx.coachMemory || 'Noch keine gespeicherten Erkenntnisse'}
+
+LETZTE GESPRÄCHE (Kontext für Kontinuität):
+${ctx.chatHistorySummary || 'Erste Session heute'}
 
 AKTUELLE LIVE-DATEN:
 ${JSON.stringify({...ctx, allTrades: undefined, coachProfile: undefined, coachMemory: undefined}, null, 2)}
@@ -235,6 +240,4 @@ BEI REGELBRUCH: "Welz: Was war der Trigger? Douglas: Dein System funktioniert nu
 KERNBOTSCHAFT FÜR JERONIMO: "Profitables Trading ist 20% Strategie und 80% mentale Stärke. Dein Setup funktioniert (positive Edge). Was dich aufhält ist Psychologie – und das kann man trainieren."
 
 
-Bei psychischer Krise: Telefonseelsorge 0800 111 0 111.`;
 }
-  
