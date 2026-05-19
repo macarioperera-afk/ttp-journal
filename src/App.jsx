@@ -135,18 +135,21 @@ const Field=({label,children})=>(
 );
 
 export default function App(){
+  // *** PATCH 1: Kein Version-Reset – Trades bleiben bei jedem Deployment erhalten ***
   const[trades,setTrades]=useState(()=>{
     try{
-      const v=localStorage.getItem('ttp_data_version');
-      if(v!=='2026-05-15-v3'){
-        localStorage.setItem('ttp_data_version','2026-05-15-v3');
+      const s=localStorage.getItem('ttp_trades');
+      if(!s){
         localStorage.setItem('ttp_trades',JSON.stringify(SEED));
-        const seedSum=SEED.filter(t=>t.acct==='09').reduce((s,t)=>s+t.pnl,0);
-        localStorage.setItem('ttp_saldo',Math.round((50000+seedSum)*100)/100);
+        const seedSum=SEED.filter(t=>t.acct==='09').reduce((a,t)=>a+t.pnl,0);
+        if(!localStorage.getItem('ttp_saldo'))localStorage.setItem('ttp_saldo',Math.round((50000+seedSum)*100)/100);
         return SEED;
       }
-      const s=localStorage.getItem('ttp_trades');
-      return s?JSON.parse(s):SEED;
+      const existing=JSON.parse(s);
+      if(!existing||!existing.length)return SEED;
+      const existingIds=new Set(existing.map(t=>t.id));
+      const merged=[...existing,...SEED.filter(t=>!existingIds.has(t.id))];
+      return merged.filter(t=>t&&t.acct&&typeof t.date==="string");
     }catch(e){return SEED;}
   });
   const[showSplash,setShowSplash]=useState(true);
@@ -157,7 +160,11 @@ export default function App(){
   const[dateFrom,setDateFrom]=useState("");
   const[dateTo,setDateTo]=useState("");
   const[aiOpen,setAiOpen]=useState(false);
-  const[aiMessages,setAiMessages]=useState([]);
+  // *** CHAT PERSISTENCE: Lade gespeicherte Nachrichten aus localStorage ***
+  const[aiMessages,setAiMessages]=useState(()=>{
+    try{const s=localStorage.getItem('ttp_chat_history');return s?JSON.parse(s):[];}
+    catch(e){return[];}
+  });
   const[aiInput,setAiInput]=useState("");
   const aiMessagesEndRef=useRef(null);
   const[pendingImage,setPendingImage]=useState(null);
@@ -227,6 +234,13 @@ export default function App(){
       aiMessagesEndRef.current.scrollIntoView({behavior:"smooth"});
     }
   },[aiMessages,aiLoading]);
+
+  // *** CHAT PERSISTENCE: Speichere Nachrichten in localStorage (max 50) ***
+  useEffect(()=>{
+    if(aiMessages.length>0){
+      try{localStorage.setItem('ttp_chat_history',JSON.stringify(aiMessages.slice(-50)));}catch(e){}
+    }
+  },[aiMessages]);
 
   useEffect(()=>{
     const t=setTimeout(()=>setShowSplash(false),1800);
@@ -375,7 +389,6 @@ export default function App(){
     const dayOfYear=Math.floor((new Date()-new Date(new Date().getFullYear(),0,0))/86400000);
     return DAILY_QUOTES[dayOfYear%DAILY_QUOTES.length];
   };
-
   const smartCoach=(userMsg,trigger)=>{
     const wins=t09.filter(t=>t.pnl>0).length;
     const wr=t09.length?Math.round(wins/t09.length*100):0;
@@ -425,7 +438,6 @@ export default function App(){
     setAiOpen(true);
     setAiLoading(true);
     setAiMessages([{role:"assistant",content:"⏳ Analysiere...",auto:true}]);
-    
     const DAYS=["So","Mo","Di","Mi","Do","Fr","Sa"];
     const tod=DAYS[new Date().getDay()];
     const dayMap={};t09.forEach(t=>{const d=DAYS[new Date(t.date).getDay()];if(!dayMap[d])dayMap[d]={w:0,n:0,pnl:0};dayMap[d].n++;dayMap[d].pnl+=t.pnl;if(t.pnl>0)dayMap[d].w++;});
@@ -437,7 +449,6 @@ export default function App(){
     const wr=t09.length?Math.round(wins/t09.length*100):0;
     const streak=()=>{let s=0;const r=[...t09].reverse();for(const t of r){if(t.pnl>0)s>0?s++:s===0?s=1:s=1;else s<0?s--:s===0?s=-1:s=-1;break;}return s;};
     const currentStreak=streak();
-
     let prompt="";
     if(type==="daily_motivation"){
       const yTradesStr=yT.length?yT.map(t=>"• "+t.time+" "+t.contract+" "+t.dir+" "+(t.pnl>=0?"+":"")+"$"+t.pnl.toFixed(0)).join("\n"):"Kein Trading gestern";
@@ -450,20 +461,7 @@ export default function App(){
       const totalRules=Object.keys(tradeData.rules||{}).length;
       const rulePct=totalRules?Math.round(ruleScore/totalRules*100):0;
       const recentLosses=t09.slice(-5).filter(t=>t.pnl<0).length;
-      prompt=`Analysiere meinen Trade und gib mir direktes Feedback:
-
-TRADE: ${tradeData.contract} ${tradeData.dir} um ${tradeData.time}
-P&L: ${tradeData.pnl>=0?"+":""}$${tradeData.pnl.toFixed(2)}
-Regelquote: ${rulePct}% (${ruleScore}/${totalRules} Regeln)
-Setup: ${tradeData.setup||"Nicht angegeben"}
-Trade Nr. heute: ${tod2.length}/${DAILY_LIMIT}
-
-KONTEXT:
-• Letzte 5 Trades: ${t09.slice(-5).map(t=>t.pnl>=0?"+$"+t.pnl.toFixed(0):"-$"+Math.abs(t.pnl).toFixed(0)).join(", ")}
-• Verluste in letzten 5: ${recentLosses}
-• Heutige P&L: ${todPnl>=0?"+":""}$${todPnl.toFixed(0)}
-
-Sei direkt und ehrlich. Erkenne Muster wenn du sie siehst. Max 4 Sätze.`;
+      prompt="Analysiere meinen Trade und gib mir direktes Feedback:\n\nTRADE: "+tradeData.contract+" "+tradeData.dir+" um "+tradeData.time+"\nP&L: "+(tradeData.pnl>=0?"+":"")+"$"+tradeData.pnl.toFixed(2)+"\nRegelquote: "+rulePct+"% ("+ruleScore+"/"+totalRules+" Regeln)\nSetup: "+(tradeData.setup||"Nicht angegeben")+"\nTrade Nr. heute: "+tod2.length+"/"+DAILY_LIMIT+"\n\nKONTEXT:\n• Letzte 5 Trades: "+t09.slice(-5).map(t=>t.pnl>=0?"+$"+t.pnl.toFixed(0):"-$"+Math.abs(t.pnl).toFixed(0)).join(", ")+"\n• Verluste in letzten 5: "+recentLosses+"\n• Heutige P&L: "+(todPnl>=0?"+":"")+"$"+todPnl.toFixed(0)+"\n\nSei direkt und ehrlich. Erkenne Muster wenn du sie siehst. Max 4 Sätze.";
     }
     else if(type==="overtrading"){
       const tod3=t09.filter(t=>t.date===todayISO());
@@ -471,22 +469,13 @@ Sei direkt und ehrlich. Erkenne Muster wenn du sie siehst. Max 4 Sätze.`;
       prompt="NOTFALL: Jeronimo hat gerade seinen "+tod3.length+". Trade gemacht (Limit: "+DAILY_LIMIT+").\n\nHeutige Trades:\n"+todTradesStr+"\nHeutige P&L: "+(todPnl>=0?"+":"")+"$"+todPnl.toFixed(0)+"\n\nGib eine KLARE STOPP-Nachricht. Kurz, direkt, keine Ausreden akzeptieren. Max 3 Sätze.";
     }
     else if(type==="trading_window"){
-      prompt=`Das Trading-Fenster (16:15-17:30) ist gerade geöffnet.
-
-HEUTE (${tod}):
-• Bisherige Trades: ${tradeCount}/${DAILY_LIMIT}
-• P&L heute: ${todPnl>=0?"+":""}$${todPnl.toFixed(0)}
-• ${tod}-WR historisch: ${dayWR}%
-• Kontoabstand: $${kontoabstand.toFixed(0)}
-
-Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`;
+      prompt="Das Trading-Fenster (16:15-17:30) ist gerade geöffnet.\n\nHEUTE ("+tod+"):\n• Bisherige Trades: "+tradeCount+"/"+DAILY_LIMIT+"\n• P&L heute: "+(todPnl>=0?"+":"")+"$"+todPnl.toFixed(0)+"\n• "+tod+"-WR historisch: "+dayWR+"%\n• Kontoabstand: $"+kontoabstand.toFixed(0)+"\n\nSoll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.";
     }
     else{
       setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);
       setAiLoading(false);
       return;
     }
-
     try{
       const wins_t=t09.filter(t=>t.pnl>0),losses_t=t09.filter(t=>t.pnl<0);
       const ctx={saldo,kontoabstand,tradeCount,todPnl,disc,todayBlocked,inPause,tradesLeft,
@@ -494,7 +483,6 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         missingToTarget:Math.max(0,goals.targetBalance-saldo),
         avgWin:wins_t.length?Math.round(wins_t.reduce((s,t)=>s+t.pnl,0)/wins_t.length):0,
         avgLoss:losses_t.length?Math.round(losses_t.reduce((s,t)=>s+t.pnl,0)/losses_t.length):0,
-        allTrades:t09.map(t=>t.date+" "+t.time+" "+t.contract+" "+t.dir+" "+(t.pnl>=0?"+":"")+"$"+t.pnl.toFixed(0)).join("\n"),
         todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time})),
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,10).map(m=>m.date+': '+m.note).join('\n')};
@@ -517,20 +505,12 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
       setAiMessages([{role:"assistant",content:smartCoach("",type),auto:true}]);
     }finally{setAiLoading(false);}
   };
-
   const startVoice=()=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){
-      // Fallback: show input field with prompt
-      showToast("Tippe deine Frage ein 👆");
-      return;
-    }
+    if(!SR){showToast("Tippe deine Frage ein 👆");return;}
     if(isRecording){setIsRecording(false);return;}
     const rec=new SR();
-    rec.lang="de-DE";
-    rec.continuous=false;
-    rec.interimResults=true;
-    rec.maxAlternatives=1;
+    rec.lang="de-DE";rec.continuous=false;rec.interimResults=true;rec.maxAlternatives=1;
     setIsRecording(true);
     try{rec.start();}catch(e){setIsRecording(false);showToast("Mikrofon Fehler: "+e.message);return;}
     rec.onresult=(e)=>{
@@ -544,14 +524,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
     };
     rec.onend=()=>{
       setIsRecording(false);
-      // Auto-send after voice input
       setAiInput(prev=>{
-        if(prev&&prev.trim()){
-          setTimeout(()=>{
-            const btn=document.getElementById("aiSendBtn");
-            if(btn)btn.click();
-          },300);
-        }
+        if(prev&&prev.trim()){setTimeout(()=>{const btn=document.getElementById("aiSendBtn");if(btn)btn.click();},300);}
         return prev;
       });
     };
@@ -564,8 +538,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
   };
 
   const handleImageSelect=(e)=>{
-    const file=e.target.files[0];
-    if(!file)return;
+    const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
     reader.onload=(ev)=>{
       const base64=ev.target.result.split(",")[1];
@@ -576,51 +549,71 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
   };
 
   const importTTPTrades=(raw)=>{
-  const lines=raw.trim().split('\n').filter(l=>l.trim());
-  const parsed=[];
-  for(const line of lines){
-    const parts=line.split('\t').map(s=>s.trim());
-    if(parts.length<8)continue;
-    const contract=parts[0].includes('MNQ')?'MNQ':'NQ';
-    const entryDT=parts[1]; // "18.5.2026, 16:54:51"
-    const pnlStr=parts[7].replace('$','').replace(',','.');
-    const pnl=parseFloat(pnlStr);
-    if(isNaN(pnl))continue;
-    // Parse date: "18.5.2026, 16:54:51" -> "2026-05-18" + "16:54"
-    const dtMatch=entryDT.match(/(\d+)\.(\d+)\.(\d+),\s*(\d+):(\d+)/);
-    if(!dtMatch)continue;
-    const [,day,month,year,hour,min]=dtMatch;
-    const date=year+'-'+month.padStart(2,'0')+'-'+day.padStart(2,'0');
-    const time=hour+':'+min;
-    const qty=parseInt(parts[6])||1;
-    const dir=qty>0?'LONG':'SHORT';
-    parsed.push({id:uid(),acct:'09',contract,date,time,pnl,dur:0,dir,setup:'Import TTP',notes:'',rules:{r1:true,r2:true,r3:true,r4:true,r5:true,r6:true}});
-  }
-  if(!parsed.length){alert('Keine Trades gefunden. Bitte TTP Export einfügen.');return;}
-  if(!window.confirm('Import: '+parsed.length+' Trades einfügen? Das aktualisiert auch den Saldo.')){return;}
-  setTrades(p=>{const u=[...p,...parsed];localStorage.setItem('ttp_trades',JSON.stringify(u));return u;});
-  const totalPnl=parsed.reduce((s,t)=>s+t.pnl,0);
-  const newSaldo=Math.round((saldo+totalPnl)*100)/100;
-  setSaldo(newSaldo);localStorage.setItem('ttp_saldo',newSaldo);
-  showToast(parsed.length+' Trades importiert! P&L: '+(totalPnl>=0?'+':'')+'$'+Math.round(totalPnl));
-};
+    const lines=raw.trim().split('\n').filter(l=>l.trim());
+    const parsed=[];
+    for(const line of lines){
+      const parts=line.split('\t').map(s=>s.trim());
+      if(parts.length<8)continue;
+      const contract=parts[0].includes('MNQ')?'MNQ':'NQ';
+      const entryDT=parts[1];
+      const pnlStr=parts[7].replace('$','').replace(',','.');
+      const pnl=parseFloat(pnlStr);
+      if(isNaN(pnl))continue;
+      const dtMatch=entryDT.match(/(\d+)\.(\d+)\.(\d+),\s*(\d+):(\d+)/);
+      if(!dtMatch)continue;
+      const[,day,month,year,hour,min]=dtMatch;
+      const date=year+'-'+month.padStart(2,'0')+'-'+day.padStart(2,'0');
+      const time=hour+':'+min;
+      const qty=parseInt(parts[6])||1;
+      const dir=qty>0?'LONG':'SHORT';
+      parsed.push({id:uid(),acct:'09',contract,date,time,pnl,dur:0,dir,setup:'Import TTP',notes:'',rules:{r1:true,r2:true,r3:true,r4:true,r5:true,r6:true}});
+    }
+    if(!parsed.length){alert('Keine Trades gefunden. Bitte TTP Export einfügen.');return;}
+    if(!window.confirm('Import: '+parsed.length+' Trades einfügen? Das aktualisiert auch den Saldo.')){return;}
+    setTrades(p=>{const u=[...p,...parsed];localStorage.setItem('ttp_trades',JSON.stringify(u));return u;});
+    const totalPnl=parsed.reduce((s,t)=>s+t.pnl,0);
+    const newSaldo=Math.round((saldo+totalPnl)*100)/100;
+    setSaldo(newSaldo);localStorage.setItem('ttp_saldo',newSaldo);
+    showToast(parsed.length+' Trades importiert! P&L: '+(totalPnl>=0?'+':'')+'$'+Math.round(totalPnl));
+  };
 
-const analyzeProblems=async()=>{
-  const selected=Object.keys(problems).filter(k=>problems[k]);
-  if(!selected.length){alert("Bitte mindestens ein Problem auswählen!");return;}
-  setProbAnalysisLoading(true);
-  try{
-    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:"Analysiere meine Trading-Probleme: "+selected.join(", ")+". Meine aktuellen Stats: WR "+Math.round(t09.filter(t=>t.pnl>0).length/(t09.length||1)*100)+"%, "+profitPlan?.overtradeDays+" Overtrading-Tage, Regelquote "+disc+"%. Gib mir einen konkreten 3-Schritte Plan für jedes Problem.",trades:t09.slice(-20),coachProfile,coachMemory,goals})});
-    const d=await r.json();
-    setProbAnalysis(d.content?.map(c=>c.text||'').join(''));
-  }catch(e){setProbAnalysis("Fehler: "+e.message);}
-  setProbAnalysisLoading(false);
-};
+  // *** PATCH 2: analyzeProblems – korrektes API Format ***
+  const analyzeProblems=async()=>{
+    const selected=Object.keys(problems).filter(k=>problems[k]);
+    if(!selected.length){alert("Bitte mindestens ein Problem auswählen!");return;}
+    setProbAnalysisLoading(true);
+    try{
+      const wins_p=t09.filter(t=>t.pnl>0),losses_p=t09.filter(t=>t.pnl<0);
+      const wr_p=t09.length?Math.round(wins_p.length/t09.length*100):0;
+      const avgW_p=wins_p.length?Math.round(wins_p.reduce((s,t)=>s+t.pnl,0)/wins_p.length):0;
+      const avgL_p=losses_p.length?Math.round(Math.abs(losses_p.reduce((s,t)=>s+t.pnl,0)/losses_p.length)):0;
+      const prompt="Meine Trading-Probleme: "+selected.join(", ")+".\n\nStats: WR "+wr_p+"%, "+(profitPlan?.overtradeDays||0)+" Overtrading-Tage, Regelquote "+disc+"%, Avg Win +$"+avgW_p+", Avg Loss -$"+avgL_p+", "+t09.length+" Trades.\n\nLetzte 10: "+t09.slice(-10).map(t=>t.dir+" "+(t.pnl>=0?"+":"")+"$"+Math.round(t.pnl)).join(", ")+".\n\nKonkreter 3-Schritte Plan fuer jedes Problem. Kurz, auf Deutsch.";
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({messages:[{role:"user",content:prompt}],context:{coachProfile:coachProfile||'',coachMemory:coachMemory.slice(0,5).map(m=>m.date+': '+m.note).join('\n')}})});
+      if(!r.ok){setProbAnalysis("Server Fehler "+r.status);return;}
+      const d=await r.json();
+      setProbAnalysis(d.message||'KI Antwort fehlt.');
+    }catch(e){setProbAnalysis("Fehler: "+e.message);}
+    setProbAnalysisLoading(false);
+  };
 
-const sendAiMessage=async()=>{
+  // *** PATCH 3: Trade via Chat speichern ***
+  const parseTradeCommand=(text)=>{
+    const t=text.toLowerCase().trim();
+    if(!["speichere:","trade:","logge:","add:","speichere "].some(p=>t.startsWith(p)))return null;
+    const contractM=text.match(/\b(MNQ|NQ|ES|MES)\b/i);
+    const dirM=text.match(/\b(LONG|SHORT)\b/i);
+    const numM=text.match(/[+-]?\d+\.?\d*/g);
+    const timeM=text.match(/\b(\d{1,2}:\d{2})\b/);
+    const dateM=text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if(!numM||!numM.length)return null;
+    const pnlList=numM.map(n=>parseFloat(n)).filter(n=>!isNaN(n)&&Math.abs(n)>0&&Math.abs(n)<50000);
+    if(!pnlList.length)return null;
+    return{contract:contractM?contractM[0].toUpperCase():"MNQ",dir:dirM?dirM[0].toUpperCase():"LONG",pnl:pnlList[pnlList.length-1],time:timeM?timeM[0]:nowHHMM(),date:dateM?dateM[0]:todayISO()};
+  };
+
+  const sendAiMessage=async()=>{
     if((!aiInput.trim()&&!aiImage)||aiLoading)return;
-    // "Merke dir..." Befehl → direkt ins Gedächtnis
     const inputLow=(aiInput||"").toLowerCase();
     if(inputLow.startsWith("merke dir")||inputLow.startsWith("vergiss nicht")){
       const note=aiInput.slice(inputLow.indexOf(" ")+1).trim();
@@ -631,13 +624,22 @@ const sendAiMessage=async()=>{
         return;
       }
     }
+    // PATCH 3b: Trade direkt über Chat speichern
+    const tradeCmd=parseTradeCommand(aiInput);
+    if(tradeCmd&&!aiImage){
+      const newT={id:uid(),acct:"09",contract:tradeCmd.contract,date:tradeCmd.date,time:tradeCmd.time,pnl:tradeCmd.pnl,dur:0,dir:tradeCmd.dir,setup:"Chat Eingabe",notes:"Via Coach Chat",rules:{r1:true,r2:true,r3:true,r4:true,r5:true,r6:true}};
+      setTrades(p=>{const u=[...p,newT];localStorage.setItem('ttp_trades',JSON.stringify(u));return u;});
+      const newSaldo=Math.round((saldo+tradeCmd.pnl)*100)/100;
+      setSaldo(newSaldo);localStorage.setItem('ttp_saldo',newSaldo);
+      setAiMessages(p=>[...p,{role:"user",content:aiInput},{role:"assistant",content:"✅ Trade gespeichert!\n\n"+tradeCmd.contract+" "+tradeCmd.dir+" am "+tradeCmd.date+" um "+tradeCmd.time+"\nP&L: "+(tradeCmd.pnl>=0?"+":"")+"$"+tradeCmd.pnl+"\nNeuer Saldo: $"+newSaldo.toLocaleString("de-DE",{maximumFractionDigits:0})+"\n\nIm Dashboard + allen Berechnungen sichtbar!"}]);
+      setAiInput("");showToast("Trade gespeichert: "+(tradeCmd.pnl>=0?"+":"")+"$"+tradeCmd.pnl);return;
+    }
     const userInput=aiInput;
     const newMsgs=[...aiMessages,{role:"user",content:userInput}];
     setAiMessages(newMsgs);
     setAiInput("");
     setAiLoading(true);
     try{
-      // Alle Trades für KI-Analyse
       const allWins=t09.filter(t=>t.pnl>0);
       const allLoss=t09.filter(t=>t.pnl<0);
       const DAYS2=["So","Mo","Di","Mi","Do","Fr","Sa"];
@@ -648,29 +650,23 @@ const sendAiMessage=async()=>{
       const setupStats={};
       t09.forEach(t=>{const s=t.setup||"Unbekannt";if(!setupStats[s])setupStats[s]={n:0,wins:0,pnl:0};setupStats[s].n++;setupStats[s].pnl+=t.pnl;if(t.pnl>0)setupStats[s].wins++;});
       const ctx={
-        // Account Status
         saldo,kontoabstand,tradeCount,todPnl,disc,todayBlocked,inPause,tradesLeft,
         currentTime:nowHHMM(),
-        currentDay:["So","Mo","Di","Mi","Do","Fr","Sa"][new Date().getDay()],
-        // Goals
+        currentDay:DAYS2[new Date().getDay()],
         monthPnl,targetBalance:goals.targetBalance,
         missingToTarget:Math.max(0,goals.targetBalance-saldo),
-        // Gesamtstatistik
         totalTrades:t09.length,
         winRate:t09.length?Math.round(allWins.length/t09.length*100):0,
         avgWin:allWins.length?Math.round(allWins.reduce((s,t)=>s+t.pnl,0)/allWins.length):0,
         avgLoss:allLoss.length?Math.round(allLoss.reduce((s,t)=>s+t.pnl,0)/allLoss.length):0,
         totalPnl:Math.round(t09.reduce((s,t)=>s+t.pnl,0)),
         overtradingToday,atLimit,
-        // Muster-Analyse
         dayStats,hourStats,setupStats,
-        // Heutige Trades (voll)
         todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time,setup:t.setup})),
-        allTrades:t09.map(t=>({d:t.date,t:t.time,p:Math.round(t.pnl),dir:t.dir,c:t.contract,s:t.setup||""})),
+        // *** allTrades entfernt – KI schreibt nicht mehr alle Trades mit ***
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,10).map(m=>m.date+': '+m.note).join('\n')
       };
-      // Build messages mit optionalem Bild
       const apiMessages=newMsgs.map((m,i)=>{
         if(i===newMsgs.length-1&&aiImage&&m.role==="user"){
           return{role:"user",content:[
@@ -680,35 +676,23 @@ const sendAiMessage=async()=>{
         }
         return{role:m.role,content:m.content};
       });
-      setAiImage(null);
-      setAiImagePreview(null);
+      setAiImage(null);setAiImagePreview(null);
       const res=await fetch('/api/chat',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({messages:apiMessages,context:ctx})
       });
       const rawText=await res.text();
-      if(!res.ok){
-        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);
-        return;
-      }
+      if(!res.ok){setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);return;}
       let data;
-      try{data=JSON.parse(rawText);}catch(e){
-        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
-        return;
-      }
-      if(!data.message){
-        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
-        return;
-      }
+      try{data=JSON.parse(rawText);}catch(e){setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);return;}
+      if(!data.message){setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);return;}
       setAiMessages(p=>[...p,{role:"assistant",content:data.message}]);
     }catch(err){
       setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Netzwerk Fehler: "+err.message}]);
     }finally{setAiLoading(false);}
   };
-
   const addTrade=()=>{
-        if(!form.pnl){showToast("Bitte P&L eingeben");return;}
+    if(!form.pnl){showToast("Bitte P&L eingeben");return;}
     const v=parseFloat(form.pnl);
     if(isNaN(v)){showToast("P&L muss eine Zahl sein");return;}
     const newT={id:uid(),acct:"09",contract:form.contract,date:form.date,time:form.time,pnl:v,dur:0,dir:form.dir,setup:form.setup,notes:form.notes,rules:{...form.rules}};
@@ -762,7 +746,6 @@ const sendAiMessage=async()=>{
   {k:"analyse",lb:"Analyse",svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 20 Q7 12 10 15 Q13 18 16 8 Q18 2 21 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/><circle cx="21" cy="4" r="2" fill="currentColor" opacity="0.8"/><circle cx="10" cy="15" r="1.5" fill="currentColor" opacity="0.6"/></svg>},
   {k:"hist",lb:"History",svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="2" rx="1" fill="currentColor" opacity="0.9"/><rect x="3" y="9" width="14" height="2" rx="1" fill="currentColor" opacity="0.7"/><rect x="3" y="14" width="16" height="2" rx="1" fill="currentColor" opacity="0.5"/><rect x="3" y="19" width="10" height="2" rx="1" fill="currentColor" opacity="0.35"/></svg>},
 ];
-
   return(
     <div style={{background:"#0d1320",minHeight:"100vh",color:"#f0f4ff",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif",fontSize:isDesktop?15:14,paddingBottom:isDesktop?"80px":"calc(80px + env(safe-area-inset-bottom,0px))",width:"100%",overflowX:"hidden"}}>
       {showSplash&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"radial-gradient(circle at center,#1a1f2e 0%,#0f1117 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",animation:"fadeOut 0.4s ease 1.4s forwards"}}>
@@ -784,7 +767,7 @@ const sendAiMessage=async()=>{
           .mr-content{max-width:100%;padding:20px 32px 30px}
           .mr-nav{max-width:960px}
         }
-        @keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes livingOrb{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.55),0 0 40px rgba(168,85,247,0.35),0 0 70px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.85),0 0 65px rgba(168,85,247,0.55),0 0 100px rgba(99,102,241,0.3)}}@keyframes orbRing1{0%{transform:scale(1);opacity:0.8}100%{transform:scale(2.5);opacity:0}}@keyframes orbRing2{0%{transform:scale(1);opacity:0.6}100%{transform:scale(3);opacity:0}}@keyframes orbRing3{0%{transform:scale(1);opacity:0.4}100%{transform:scale(3.8);opacity:0}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.55;transform:translate(-50%,-50%) scale(0.85)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}}@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.5),0 0 40px rgba(168,85,247,0.3),0 0 60px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.8),0 0 60px rgba(168,85,247,0.5),0 0 90px rgba(99,102,241,0.25)}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.6;transform:translate(-50%,-50%) scale(0.8)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}}
+        @keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}@keyframes livingOrb{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}@keyframes orbGlow{0%,100%{box-shadow:0 0 20px rgba(99,102,241,0.55),0 0 40px rgba(168,85,247,0.35),0 0 70px rgba(99,102,241,0.15)}50%{box-shadow:0 0 30px rgba(99,102,241,0.85),0 0 65px rgba(168,85,247,0.55),0 0 100px rgba(99,102,241,0.3)}}@keyframes orbRing1{0%{transform:scale(1);opacity:0.8}100%{transform:scale(2.5);opacity:0}}@keyframes orbRing2{0%{transform:scale(1);opacity:0.6}100%{transform:scale(3);opacity:0}}@keyframes orbRing3{0%{transform:scale(1);opacity:0.4}100%{transform:scale(3.8);opacity:0}}@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbCore{0%,100%{opacity:0.55;transform:translate(-50%,-50%) scale(0.85)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}}@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes fadeOut{to{opacity:0;visibility:hidden}}
@@ -877,977 +860,178 @@ const sendAiMessage=async()=>{
       </div>}
 
       <div style={{padding:isDesktop?"20px 28px 30px":"16px 16px 20px",width:"100%",boxSizing:"border-box",maxWidth:"100%"}}>
-
         {/* DASHBOARD */}
         {tab==="dash"&&(isDesktop?(
           <div style={{display:"flex",gap:20,width:"100%",alignItems:"start"}}>
             <div style={{flex:"0 0 48%",display:"flex",flexDirection:"column",gap:16}}>
-
-          {todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
-            <span style={{fontSize:22}}>🚫</span>
-            <div><div style={{color:R,fontWeight:700,fontSize:13}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11}}>Morgen wieder. Heute: analysieren.</div></div>
-          </div>}
-          {overtradingToday&&!todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center"}}>
-            <span style={{fontSize:22}}>🚫</span>
-            <div><div style={{color:R,fontWeight:700,fontSize:13}}>3 Trades – Morgen gesperrt!</div><div style={{color:"#fca5a5",fontSize:11}}>Rechner aus.</div></div>
-          </div>}
-          {atLimit&&!overtradingToday&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}}>
-            <span>🛑</span><div><div style={{color:O,fontWeight:800}}>2 Trades – Tageslimit!</div><div style={{color:"#fdba74",fontSize:11}}>Kein 3. Trade!</div></div>
-          </div>}
-          {inPause&&<div style={{background:"linear-gradient(135deg,rgba(245,158,11,0.15),rgba(239,68,68,0.08))",border:"2px solid rgba(245,158,11,0.6)",borderRadius:14,padding:"16px 18px",display:"flex",gap:14,alignItems:"center",animation:"glowPulse 2s ease infinite"}}>
-            <span style={{fontSize:24}}>⏸</span>
-            <div style={{flex:1}}>
-              <div style={{color:Y,fontWeight:700,fontSize:13,marginBottom:4}}>Pflichtpause</div>
-              <div style={{color:Y,fontWeight:800,fontSize:36,lineHeight:1}}>{pStr}</div>
-              <div style={{color:"#fbbf24",fontSize:11,marginTop:5}}>Kein Impuls-Trade – warte den Timer ab</div>
-            </div>
-          </div>}
-
-
+          {todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}><span style={{fontSize:22}}>🚫</span><div><div style={{color:R,fontWeight:700,fontSize:13}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11}}>Morgen wieder. Heute: analysieren.</div></div></div>}
+          {overtradingToday&&!todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:22}}>🚫</span><div><div style={{color:R,fontWeight:700,fontSize:13}}>3 Trades – Morgen gesperrt!</div><div style={{color:"#fca5a5",fontSize:11}}>Rechner aus.</div></div></div>}
+          {atLimit&&!overtradingToday&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}}><span>🛑</span><div><div style={{color:O,fontWeight:800}}>2 Trades – Tageslimit!</div><div style={{color:"#fdba74",fontSize:11}}>Kein 3. Trade!</div></div></div>}
+          {inPause&&<div style={{background:"linear-gradient(135deg,rgba(245,158,11,0.15),rgba(239,68,68,0.08))",border:"2px solid rgba(245,158,11,0.6)",borderRadius:14,padding:"16px 18px",display:"flex",gap:14,alignItems:"center",animation:"glowPulse 2s ease infinite"}}><span style={{fontSize:24}}>⏸</span><div style={{flex:1}}><div style={{color:Y,fontWeight:700,fontSize:13,marginBottom:4}}>Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:36,lineHeight:1}}>{pStr}</div><div style={{color:"#fbbf24",fontSize:11,marginTop:5}}>Kein Impuls-Trade – warte den Timer ab</div></div></div>}
           <Card style={{borderColor:B+"44"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-              <div>
-                <div style={{color:"#8b96b0",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div>
-                <div style={{color:pc(netPnl),fontWeight:800,fontSize:isDesktop?38:26}}>{netPnl>=0?"+":"-"}${Math.round(Math.abs(netPnl)).toLocaleString()}</div>
-                <div style={{color:"#8b96b0",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div>
-              </div>
-              <div style={{background:"#0d1320",borderRadius:8,padding:"8px 12px",textAlign:"right"}}>
-                <div style={{color:"#8b96b0",fontSize:9,marginBottom:1}}>HEUTE</div>
-                <div style={{color:pc(todPnl),fontWeight:800,fontSize:16}}>{fs(todPnl)}</div>
-                <div style={{color:"#8b96b0",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div>
-              </div>
+              <div><div style={{color:"#8b96b0",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div><div style={{color:pc(netPnl),fontWeight:800,fontSize:isDesktop?38:26}}>{netPnl>=0?"+":"-"}${Math.round(Math.abs(netPnl)).toLocaleString()}</div><div style={{color:"#8b96b0",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div></div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"8px 12px",textAlign:"right"}}><div style={{color:"#8b96b0",fontSize:9,marginBottom:1}}>HEUTE</div><div style={{color:pc(todPnl),fontWeight:800,fontSize:16}}>{fs(todPnl)}</div><div style={{color:"#8b96b0",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div></div>
             </div>
-            <div style={{marginBottom:6}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#8b96b0",fontSize:10}}>Max DD Abstand</span>
-                <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${Math.round(kontoabstand).toLocaleString()} ({Math.round(kontoabstand/BUFFER*100)}%)</span>
-              </div>
-              <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
-            </div>
-            <div style={{marginBottom:8}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#8b96b0",fontSize:10}}>Disziplin</span>
-                <span style={{color:sc(disc),fontWeight:700}}>{disc}% / {goals.disc}% Ziel</span>
-              </div>
-              <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
-            </div>
+            <div style={{marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#8b96b0",fontSize:10}}>Max DD Abstand</span><span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${Math.round(kontoabstand).toLocaleString()} ({Math.round(kontoabstand/BUFFER*100)}%)</span></div><Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/></div>
+            <div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#8b96b0",fontSize:10}}>Disziplin</span><span style={{color:sc(disc),fontWeight:700}}>{disc}% / {goals.disc}% Ziel</span></div><Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/></div>
             <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>MONAT P&L</div>
-                <div style={{color:pc(monthPnl),fontWeight:800,fontSize:14}}>{fs(monthPnl)}</div>
-                <div style={{color:"#4a5568",fontSize:8}}>diesen Monat</div>
-              </div>
-              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>WIN RATE</div>
-                <div style={{color:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R,fontWeight:800,fontSize:14}}>{t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0}%</div>
-                <div style={{color:"#4a5568",fontSize:8}}>{t09.length} Trades</div>
-              </div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}><div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>MONAT P&L</div><div style={{color:pc(monthPnl),fontWeight:800,fontSize:14}}>{fs(monthPnl)}</div><div style={{color:"#4a5568",fontSize:8}}>diesen Monat</div></div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}><div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>WIN RATE</div><div style={{color:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R,fontWeight:800,fontSize:14}}>{t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0}%</div><div style={{color:"#4a5568",fontSize:8}}>{t09.length} Trades</div></div>
             </div>
             <div style={{paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <Field label="SALDO ($)">
-                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-              </Field>
-              <Field label="MAX DD ($)">
-                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-              </Field>
+              <Field label="SALDO ($)"><input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+              <Field label="MAX DD ($)"><input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
             </div>
           </Card>
-
-          
-
           <Card style={{breakInside:"avoid",height:isDesktop?"auto":"auto"}}>
             <div style={{fontWeight:isDesktop?800:700,marginBottom:isDesktop?14:10,fontSize:isDesktop?18:15}}>{now.toLocaleString("de-DE",{month:"long",year:"numeric"})}</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>
-              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#8b96b0",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}
-            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>{["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#8b96b0",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isDesktop?6:3}}>{renderCal()}</div>
           </Card>
-
             </div>
             <div style={{flex:1,display:"flex",flexDirection:"column",gap:16}}>
-<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {[{l:"TRADES",v:tradeCount+"/"+DAILY_LIMIT,c:tradesLeft>0?G:R},{l:"MONAT P&L",v:fs(monthPnl),c:pc(monthPnl)},{l:"WIN RATE",v:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)+"%",c:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R},{l:"DD ABSTAND",v:"$"+Math.round(kontoabstand),c:kontoabstand<1000?Y:G}].map(s=>(
-              <div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}>
-                <div style={{color:"#8b96b0",fontSize:9,marginBottom:3}}>{s.l}</div>
-                <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
-              </div>
+              <div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}><div style={{color:"#8b96b0",fontSize:9,marginBottom:3}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div></div>
             ))}
           </div>
-
-
-          {/* WEG ZUR PROFITABILITÄT */}
           {profitPlan&&<Card style={{borderColor:"#6366f133",background:"linear-gradient(135deg,#0a0b12,#0f1117)"}} onClick={()=>setProfExpanded(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:4,height:4,borderRadius:"50%",background:"#6366f1",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDots 2.5s ease-in-out infinite",boxShadow:"0 0 4px rgba(99,102,241,0.8)"}}/>
-                <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Weg zur Profitabilität</div>
-                  <div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div>
-                </div>
-              </div>
-              
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:4,height:4,borderRadius:"50%",background:"#6366f1",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDots 2.5s ease-in-out infinite",boxShadow:"0 0 4px rgba(99,102,241,0.8)"}}/><div><div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Weg zur Profitabilität</div><div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div></div></div>
             </div>
-            {!profExpanded&&!isDesktop&&profitPlan&&<div style={{display:"flex",gap:8,marginBottom:2}}>
-              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#6b7a9a",fontSize:8}}>EV / TAG</div>
-                <div style={{color:profitPlan.dailyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.dailyEV>=0?"+":""}${profitPlan.dailyEV}</div>
-              </div>
-              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#6b7a9a",fontSize:8}}>PROGNOSE MONAT</div>
-                <div style={{color:profitPlan.monthlyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.monthlyEV>=0?"+":""}${profitPlan.monthlyEV}</div>
-              </div>
-              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#6b7a9a",fontSize:8}}>OVERTRADING</div>
-                <div style={{color:profitPlan.overtradeDays>3?R:G,fontWeight:800,fontSize:13}}>{profitPlan.overtradeDays} Tage</div>
-              </div>
-            </div>}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-              {[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},
-                {l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:Y},
-                {l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}
-              ].map(s=>(
-                <div key={s.l} style={{background:"#0d1420",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}>
-                  <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
-                  <div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div>
-                </div>
-              ))}
-            </div>
-            {true&&(()=>{
-              const wr=profitPlan.wr/100;
-              const slT=40,tpT=80,slD=20,tpD=40,crv=2;
-              const evT=Math.round(wr*tpD-(1-wr)*slD);
-              const evD=evT*DAILY_LIMIT;
-              const today=new Date();const endM=new Date(today.getFullYear(),today.getMonth()+1,0);
-              let dLeft=0;for(let d=new Date(today);d<=endM;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft++;}
-              const projM=Math.round(dLeft*evD);
-              const missingNow=Math.max(0,goals.targetBalance-saldo);
-              const monateBis=evD>0?Math.ceil(missingNow/(evD*22)):null;
-              return(
-                <div style={{marginTop:12}}>
-                  {profitPlan.overtradeDays>0&&<div style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
-                    <span style={{fontSize:14}}>⚠️</span>
-                    <div style={{color:"#fca5a5",fontSize:11,fontWeight:600}}>{profitPlan.overtradeDays}/{profitPlan.totalDays} Tage Overtrading – Dein #1 Problem</div>
-                  </div>}
-                  <div style={{background:"#0d1420",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}>
-                    <div style={{color:"#6366f1",fontWeight:700,fontSize:11,marginBottom:8,letterSpacing:"0.5px"}}>SETUP 1 MNQ</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                      {[{l:"STOP LOSS",v:"40 Ticks",s:"$20",c:R},{l:"TAKE PROFIT",v:"80 Ticks",s:"$40",c:G},{l:"CRV",v:"2:1",s:"Risk/Reward",c:Y}].map(s=>(
-                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
-                          <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
-                          <div style={{color:s.c,fontSize:9,opacity:0.7}}>{s.s}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                      {[
-                        {l:"EV / TRADE",v:(evT>=0?"+":"")+"$"+evT,c:evT>=0?G:R,s:"Ø Gewinn pro Trade"},
-                        {l:"EV / TAG",v:(evD>=0?"+":"")+"$"+evD,c:evD>=0?G:R,s:"2 Trades · Expected Value"},
-                        {l:"PROGNOSE MONAT",v:(projM>=0?"+":"")+"$"+projM,c:projM>=0?G:R,s:dLeft+" Handelstage"},
-                        {l:"MONATE BIS ZIEL",v:monateBis?monateBis+"Mo":"∞",c:monateBis&&monateBis<=6?G:Y,s:"bei akt. Performance"},
-                        {l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"},
-                      ].map(s=>(
-                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}>
-                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:800,fontSize:15}}>{s.v}</div>
-                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
-                      <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
-                    </div>
-                    {[
-                      profitPlan.wr<profitPlan.neededWR&&"📊 WR "+profitPlan.wr+"% liegt unter Break-Even "+profitPlan.neededWR+"%. Fokus auf Setup-Qualität statt Quantität.",
-                      profitPlan.overtradeDays>5&&"⚠️ "+profitPlan.overtradeDays+" Overtrading-Tage destroyen deinen EV. Strikt max "+DAILY_LIMIT+" Trades/Tag.",
-                      evT>0&&"✅ Positive Edge vorhanden. Mit Disziplin wirst du langfristig profitabel.",
-                      evT<=0&&"🔴 Negativer EV – Verluste übersteigen Gewinne statistisch. Setup oder Disziplin optimieren.",
-                    ].filter(Boolean).map((t,i)=>(
-                      <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
-                    ))}
-                    <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
-                  </div>
-                </div>
-              );
-            })()}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>{[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},{l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:Y},{l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}].map(s=>(<div key={s.l} style={{background:"#0d1420",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}><div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div></div>))}</div>
+            {true&&(()=>{const wr=profitPlan.wr/100;const slD=20,tpD=40;const evT=Math.round(wr*tpD-(1-wr)*slD);const evD=evT*DAILY_LIMIT;const today=new Date();const endM=new Date(today.getFullYear(),today.getMonth()+1,0);let dLeft=0;for(let d=new Date(today);d<=endM;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft++;}const projM=Math.round(dLeft*evD);const missingNow=Math.max(0,goals.targetBalance-saldo);const monateBis=evD>0?Math.ceil(missingNow/(evD*22)):null;
+            return(<div style={{marginTop:12}}>{profitPlan.overtradeDays>0&&<div style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10,alignItems:"center"}}><span style={{fontSize:14}}>⚠️</span><div style={{color:"#fca5a5",fontSize:11,fontWeight:600}}>{profitPlan.overtradeDays}/{profitPlan.totalDays} Tage Overtrading – Dein #1 Problem</div></div>}<div style={{background:"#0d1420",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}><div style={{color:"#6366f1",fontWeight:700,fontSize:11,marginBottom:8,letterSpacing:"0.5px"}}>SETUP 1 MNQ</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>{[{l:"STOP LOSS",v:"40 Ticks",s:"$20",c:R},{l:"TAKE PROFIT",v:"80 Ticks",s:"$40",c:G},{l:"CRV",v:"2:1",s:"Risk/Reward",c:Y}].map(s=>(<div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 6px",textAlign:"center"}}><div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div><div style={{color:s.c,fontSize:9,opacity:0.7}}>{s.s}</div></div>))}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>{[{l:"EV / TRADE",v:(evT>=0?"+":"")+"$"+evT,c:evT>=0?G:R,s:"Ø Gewinn pro Trade"},{l:"EV / TAG",v:(evD>=0?"+":"")+"$"+evD,c:evD>=0?G:R,s:"2 Trades · Expected Value"},{l:"PROGNOSE MONAT",v:(projM>=0?"+":"")+"$"+projM,c:projM>=0?G:R,s:dLeft+" Handelstage"},{l:"MONATE BIS ZIEL",v:monateBis?monateBis+"Mo":"∞",c:monateBis&&monateBis<=6?G:Y,s:"bei akt. Performance"},{l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"}].map(s=>(<div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}><div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:15}}>{s.v}</div><div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div></div>))}</div></div><div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/><div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div></div>{[profitPlan.wr<profitPlan.neededWR&&"📊 WR "+profitPlan.wr+"% liegt unter Break-Even "+profitPlan.neededWR+"%. Fokus auf Setup-Qualität statt Quantität.",profitPlan.overtradeDays>5&&"⚠️ "+profitPlan.overtradeDays+" Overtrading-Tage destroyen deinen EV. Strikt max "+DAILY_LIMIT+" Trades/Tag.",evT>0&&"✅ Positive Edge vorhanden. Mit Disziplin wirst du langfristig profitabel.",evT<=0&&"🔴 Negativer EV – Verluste übersteigen Gewinne statistisch. Setup oder Disziplin optimieren."].filter(Boolean).map((t,i)=>(<div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>))}<div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div></div></div>);})()}
           </Card>}
-
-
-          {/* MEIN MONATSZIEL */}
           <Card style={{borderColor:P+"33",background:"#0d0a14"}} onClick={()=>setMonatExp(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
-                <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Mein Monatsziel</div>
-                  <div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div>
-                </div>
-              </div>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"22",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️</button>
-                <span style={{color:P,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span>
-              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/><div><div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Mein Monatsziel</div><div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div></div></div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}><button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"22",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️</button><span style={{color:P,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span></div>
             </div>
-            {(()=>{
-              const startSaldo=Math.round((saldo-monthPnl)*100)/100;
-              const monthNeeded=Math.round(Math.max(1,goals.targetBalance-startSaldo));
-              const monthPct=Math.round(Math.min(100,Math.max(0,monthPnl/monthNeeded*100)));
-              const missing=Math.round(Math.max(0,goals.targetBalance-saldo));
-              const today2=new Date();const endM2=new Date(today2.getFullYear(),today2.getMonth()+1,0);
-              let dLeft2=0;for(let d=new Date(today2);d<=endM2;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft2++;}
-              const dailyNeed=dLeft2>0?Math.ceil(missing/dLeft2):0;
-              const tradeNeed=Math.ceil(dailyNeed/DAILY_LIMIT);
-              const slD=20,tpD=40;
-              return(
-                <div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                    {[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#f0f4ff"},
-                      {l:"ZIEL",v:"$"+goals.targetBalance.toLocaleString("de-DE"),c:P},
-                      {l:"NOCH FEHLT",v:missing<=0?"✅":"+$"+Math.round(missing).toLocaleString("de-DE"),c:missing<=0?G:R}
-                    ].map(s=>(
-                      <div key={s.l} style={{background:"#0f1428",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}>
-                        <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
-                        <div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{marginBottom:6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                      <span style={{color:"#8b96b0",fontSize:10}}>Monatsfortschritt</span>
-                      <span style={{color:monthPct>=100?G:P,fontWeight:700,fontSize:10}}>{monthPct}% ({monthPnl>=0?"+":""}${Math.round(monthPnl)} von ${monthNeeded} nötig)</span>
-                    </div>
-                    <div style={{height:6,borderRadius:3,background:"#1e2540",overflow:"hidden"}}>
-                      <div style={{height:"100%",borderRadius:3,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
-                    </div>
-                  </div>
-                  {true&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e1428"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-                      {[
-                        {l:"HANDELSTAGE NOCH",v:dLeft2+" Tage",c:dLeft2>5?G:dLeft2>2?Y:R,s:"diesen Monat"},
-                        {l:"GEWINN/TAG NÖTIG",v:missing<=0?"✅ Erreicht":"$"+dailyNeed,c:missing<=0?G:dailyNeed<100?G:Y,s:"um Ziel zu erreichen"},
-                        {l:"GEWINN/TRADE NÖTIG",v:missing<=0?"✅":"$"+tradeNeed,c:missing<=0?G:tradeNeed<50?G:Y,s:"bei 2 Trades/Tag"},
-                        {l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#f0f4ff",s:dLeft2+" Tage × "+DAILY_LIMIT},
-                        {l:"DIESEN MONAT P&L",v:(monthPnl>=0?"+":"")+"$"+monthPnl,c:pc(monthPnl),s:"seit Monatsstart"},
-                        {l:"REGELQUOTE",v:disc+"%",c:sc(disc),s:"Ziel: "+goals.disc+"%"},
-                      ].map(s=>(
-                        <div key={s.l} style={{background:"#0f1428",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}>
-                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div>
-                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{background:"linear-gradient(135deg,rgba(168,85,247,0.08),rgba(99,102,241,0.05))",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(168,85,247,0.15)"}}>
-                      <div style={{color:P,fontSize:11,fontWeight:700,marginBottom:4}}>🤖 KI Einschätzung:</div>
-                      <div style={{color:"#cbd5e1",fontSize:11,lineHeight:1.5}}>
-                        {missing<=0?"✅ Ziel bereits erreicht! Fokus auf Regelquote und Kapital schützen.":
-                        dailyNeed>80?"Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Tagen ist das Ziel diesen Monat schwer erreichbar. Realistisches Ziel setzen.":
-                        "Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Handelstagen erreichbar. "+DAILY_LIMIT+" Trades/Tag, SL $"+slD+", TP $"+tpD+" – Prozess über Profit."}
-                      </div>
-                    </div>
-                  </div>}
-                </div>
-              );
-            })()}
-
-
-          {/* TRADING PROBLEME CARD */}
+            {(()=>{const startSaldo=Math.round((saldo-monthPnl)*100)/100;const monthNeeded=Math.round(Math.max(1,goals.targetBalance-startSaldo));const monthPct=Math.round(Math.min(100,Math.max(0,monthPnl/monthNeeded*100)));const missing=Math.round(Math.max(0,goals.targetBalance-saldo));const today2=new Date();const endM2=new Date(today2.getFullYear(),today2.getMonth()+1,0);let dLeft2=0;for(let d=new Date(today2);d<=endM2;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft2++;}const dailyNeed=dLeft2>0?Math.ceil(missing/dLeft2):0;const tradeNeed=Math.ceil(dailyNeed/DAILY_LIMIT);const slD=20,tpD=40;
+            return(<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>{[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#f0f4ff"},{l:"ZIEL",v:"$"+goals.targetBalance.toLocaleString("de-DE"),c:P},{l:"NOCH FEHLT",v:missing<=0?"✅":"+$"+Math.round(missing).toLocaleString("de-DE"),c:missing<=0?G:R}].map(s=>(<div key={s.l} style={{background:"#0f1428",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}><div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div></div>))}</div><div style={{marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#8b96b0",fontSize:10}}>Monatsfortschritt</span><span style={{color:monthPct>=100?G:P,fontWeight:700,fontSize:10}}>{monthPct}% ({monthPnl>=0?"+":""}${Math.round(monthPnl)} von ${monthNeeded} nötig)</span></div><div style={{height:6,borderRadius:3,background:"#1e2540",overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/></div></div><div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e1428"}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>{[{l:"HANDELSTAGE NOCH",v:dLeft2+" Tage",c:dLeft2>5?G:dLeft2>2?Y:R,s:"diesen Monat"},{l:"GEWINN/TAG NÖTIG",v:missing<=0?"✅ Erreicht":"$"+dailyNeed,c:missing<=0?G:dailyNeed<100?G:Y,s:"um Ziel zu erreichen"},{l:"GEWINN/TRADE NÖTIG",v:missing<=0?"✅":"$"+tradeNeed,c:missing<=0?G:tradeNeed<50?G:Y,s:"bei 2 Trades/Tag"},{l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#f0f4ff",s:dLeft2+" Tage × "+DAILY_LIMIT},{l:"DIESEN MONAT P&L",v:(monthPnl>=0?"+":"")+"$"+monthPnl,c:pc(monthPnl),s:"seit Monatsstart"},{l:"REGELQUOTE",v:disc+"%",c:sc(disc),s:"Ziel: "+goals.disc+"%"}].map(s=>(<div key={s.l} style={{background:"#0f1428",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}><div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div><div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div><div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div></div>))}</div><div style={{background:"linear-gradient(135deg,rgba(168,85,247,0.08),rgba(99,102,241,0.05))",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(168,85,247,0.15)"}}><div style={{color:P,fontSize:11,fontWeight:700,marginBottom:4}}>🤖 KI Einschätzung:</div><div style={{color:"#cbd5e1",fontSize:11,lineHeight:1.5}}>{missing<=0?"✅ Ziel bereits erreicht! Fokus auf Regelquote und Kapital schützen.":dailyNeed>80?"Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Tagen ist das Ziel diesen Monat schwer erreichbar. Realistisches Ziel setzen.":"Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Handelstagen erreichbar. "+DAILY_LIMIT+" Trades/Tag, SL $"+slD+", TP $"+tpD+" – Prozess über Profit."}</div></div></div></div>);})()}
+          {/* TRADING PROBLEME */}
           <Card style={{borderColor:"rgba(245,158,11,0.2)",background:"linear-gradient(145deg,#1a1508 0%,#0f1010 100%)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,cursor:"pointer"}} onClick={()=>setProbExp(p=>!p)}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle,#fcd34d,#f59e0b 60%,#92400e)",animation:"livingOrb 2s ease-in-out infinite",boxShadow:"0 0 10px rgba(245,158,11,0.6)",flexShrink:0}}/>
-                <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Meine Trading-Probleme</div>
-                  <div style={{color:"#f59e0b",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KI-DIAGNOSE</div>
-                </div>
-              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle,#fcd34d,#f59e0b 60%,#92400e)",animation:"livingOrb 2s ease-in-out infinite",boxShadow:"0 0 10px rgba(245,158,11,0.6)",flexShrink:0}}/><div><div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Meine Trading-Probleme</div><div style={{color:"#f59e0b",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KI-DIAGNOSE</div></div></div>
               <span style={{color:"#f59e0b",fontSize:11,fontWeight:600}}>{probExp?"▲":"▼"}</span>
             </div>
-            {(()=>{
-              const PROBS=[
-                {k:"overtrading",l:"Overtrading",d:"Zu viele Trades pro Tag"},
-                {k:"fomo",l:"FOMO",d:"Fear of Missing Out"},
-                {k:"revenge",l:"Revenge Trading",d:"Nach Verlust sofort wieder einsteigen"},
-                {k:"early_exit",l:"Zu früh aussteigen",d:"TP nicht abwarten"},
-                {k:"no_sl",l:"SL nicht einhalten",d:"Stop Loss verschoben oder ignoriert"},
-                {k:"outside_window",l:"Falsche Zeiten",d:"Außerhalb des Zeitfensters traden"},
-                {k:"impulse",l:"Impuls-Trading",d:"Kein Setup, einfach rein"},
-                {k:"fear",l:"Angst vor Verlusten",d:"Zögern bei guten Setups"},
-              ];
-              const selected=Object.keys(problems).filter(k=>problems[k]);
-              return(
-                <div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
-                    {PROBS.map(p=>(
-                      <button key={p.k} onClick={()=>saveProblems({...problems,[p.k]:!problems[p.k]})}
-                        title={p.d}
-                        style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,
-                          background:problems[p.k]?"rgba(245,158,11,0.25)":"rgba(255,255,255,0.04)",
-                          border:"1px solid "+(problems[p.k]?"rgba(245,158,11,0.6)":"rgba(255,255,255,0.1)"),
-                          color:problems[p.k]?"#fcd34d":"#6b7a9a",
-                          transition:"all .2s"}}>
-                        {problems[p.k]?"✓ ":""}{p.l}
-                      </button>
-                    ))}
-                  </div>
-                  {selected.length>0&&(
-                    <button onClick={analyzeProblems} disabled={probLoading}
-                      style={{width:"100%",padding:"10px",borderRadius:10,fontWeight:700,fontSize:13,
-                        background:"linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.1))",
-                        border:"1px solid rgba(245,158,11,0.3)",color:probLoading?"#6b7280":"#fcd34d",marginBottom:8}}>
-                      {probLoading?"🤖 Analysiere...":"🤖 KI-Diagnose starten ("+selected.length+" Probleme)"}
-                    </button>
-                  )}
-                  {probExp&&probAnalysis&&(
-                    <div style={{background:"rgba(245,158,11,0.06)",borderRadius:10,padding:12,border:"1px solid rgba(245,158,11,0.15)"}}>
-                      <div style={{color:"#f59e0b",fontSize:11,fontWeight:700,marginBottom:6}}>🎯 Dein persönlicher Plan:</div>
-                      <div style={{color:"#a8b8d0",fontSize:11,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{probAnalysis}</div>
-                    </div>
-                  )}
-                  {!probAnalysis&&selected.length===0&&(
-                    <div style={{color:"#4a5568",fontSize:11,textAlign:"center",padding:"4px 0"}}>
-                      Wähle deine Probleme → KI gibt dir einen konkreten Plan
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {(()=>{const PROBS=[{k:"overtrading",l:"Overtrading",d:"Zu viele Trades pro Tag"},{k:"fomo",l:"FOMO",d:"Fear of Missing Out"},{k:"revenge",l:"Revenge Trading",d:"Nach Verlust sofort wieder einsteigen"},{k:"early_exit",l:"Zu früh aussteigen",d:"TP nicht abwarten"},{k:"no_sl",l:"SL nicht einhalten",d:"Stop Loss verschoben oder ignoriert"},{k:"outside_window",l:"Falsche Zeiten",d:"Außerhalb des Zeitfensters traden"},{k:"impulse",l:"Impuls-Trading",d:"Kein Setup, einfach rein"},{k:"fear",l:"Angst vor Verlusten",d:"Zögern bei guten Setups"}];const selected=Object.keys(problems).filter(k=>problems[k]);return(<div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>{PROBS.map(p=>(<button key={p.k} onClick={()=>saveProblems({...problems,[p.k]:!problems[p.k]})} title={p.d} style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:problems[p.k]?"rgba(245,158,11,0.25)":"rgba(255,255,255,0.04)",border:"1px solid "+(problems[p.k]?"rgba(245,158,11,0.6)":"rgba(255,255,255,0.1)"),color:problems[p.k]?"#fcd34d":"#6b7a9a",transition:"all .2s"}}>{problems[p.k]?"✓ ":""}{p.l}</button>))}</div>{selected.length>0&&(<button onClick={analyzeProblems} disabled={probLoading} style={{width:"100%",padding:"10px",borderRadius:10,fontWeight:700,fontSize:13,background:"linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.1))",border:"1px solid rgba(245,158,11,0.3)",color:probLoading?"#6b7280":"#fcd34d",marginBottom:8}}>{probLoading?"🤖 Analysiere...":"🤖 KI-Diagnose starten ("+selected.length+" Probleme)"}</button>)}{probExp&&probAnalysis&&(<div style={{background:"rgba(245,158,11,0.06)",borderRadius:10,padding:12,border:"1px solid rgba(245,158,11,0.15)"}}><div style={{color:"#f59e0b",fontSize:11,fontWeight:700,marginBottom:6}}>🎯 Dein persönlicher Plan:</div><div style={{color:"#a8b8d0",fontSize:11,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{probAnalysis}</div></div>)}{!probAnalysis&&selected.length===0&&(<div style={{color:"#4a5568",fontSize:11,textAlign:"center",padding:"4px 0"}}>Wähle deine Probleme → KI gibt dir einen konkreten Plan</div>)}</div>);})()}
           </Card>
           </Card>
             </div>
           </div>
         ):(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-
-          {todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}>
-            <span style={{fontSize:22}}>🚫</span>
-            <div><div style={{color:R,fontWeight:700,fontSize:13}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11}}>Morgen wieder. Heute: analysieren.</div></div>
-          </div>}
-          {overtradingToday&&!todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center"}}>
-            <span style={{fontSize:22}}>🚫</span>
-            <div><div style={{color:R,fontWeight:700,fontSize:13}}>3 Trades – Morgen gesperrt!</div><div style={{color:"#fca5a5",fontSize:11}}>Rechner aus.</div></div>
-          </div>}
-          {atLimit&&!overtradingToday&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}}>
-            <span>🛑</span><div><div style={{color:O,fontWeight:800}}>2 Trades – Tageslimit!</div><div style={{color:"#fdba74",fontSize:11}}>Kein 3. Trade!</div></div>
-          </div>}
-          {inPause&&<div style={{background:"linear-gradient(135deg,rgba(245,158,11,0.15),rgba(239,68,68,0.08))",border:"2px solid rgba(245,158,11,0.6)",borderRadius:14,padding:"16px 18px",display:"flex",gap:14,alignItems:"center",animation:"glowPulse 2s ease infinite"}}>
-            <span style={{fontSize:24}}>⏸</span>
-            <div style={{flex:1}}>
-              <div style={{color:Y,fontWeight:700,fontSize:13,marginBottom:4}}>Pflichtpause</div>
-              <div style={{color:Y,fontWeight:800,fontSize:36,lineHeight:1}}>{pStr}</div>
-              <div style={{color:"#fbbf24",fontSize:11,marginTop:5}}>Kein Impuls-Trade – warte den Timer ab</div>
-            </div>
-          </div>}
-
-
+          {todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center",gridColumn:isDesktop?"1/-1":"auto"}}><span style={{fontSize:22}}>🚫</span><div><div style={{color:R,fontWeight:700,fontSize:13}}>Heute gesperrt (Overtrading gestern)</div><div style={{color:"#fca5a5",fontSize:11}}>Morgen wieder. Heute: analysieren.</div></div></div>}
+          {overtradingToday&&!todayBlocked&&<div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:14,padding:"14px 16px",display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:22}}>🚫</span><div><div style={{color:R,fontWeight:700,fontSize:13}}>3 Trades – Morgen gesperrt!</div><div style={{color:"#fca5a5",fontSize:11}}>Rechner aus.</div></div></div>}
+          {atLimit&&!overtradingToday&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:10,padding:"10px 14px",display:"flex",gap:10,alignItems:"center"}}><span>🛑</span><div><div style={{color:O,fontWeight:800}}>2 Trades – Tageslimit!</div><div style={{color:"#fdba74",fontSize:11}}>Kein 3. Trade!</div></div></div>}
+          {inPause&&<div style={{background:"linear-gradient(135deg,rgba(245,158,11,0.15),rgba(239,68,68,0.08))",border:"2px solid rgba(245,158,11,0.6)",borderRadius:14,padding:"16px 18px",display:"flex",gap:14,alignItems:"center",animation:"glowPulse 2s ease infinite"}}><span style={{fontSize:24}}>⏸</span><div style={{flex:1}}><div style={{color:Y,fontWeight:700,fontSize:13,marginBottom:4}}>Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:36,lineHeight:1}}>{pStr}</div><div style={{color:"#fbbf24",fontSize:11,marginTop:5}}>Kein Impuls-Trade – warte den Timer ab</div></div></div>}
           <Card style={{borderColor:B+"44"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-              <div>
-                <div style={{color:"#8b96b0",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div>
-                <div style={{color:pc(netPnl),fontWeight:800,fontSize:isDesktop?38:26}}>{netPnl>=0?"+":"-"}${Math.round(Math.abs(netPnl)).toLocaleString()}</div>
-                <div style={{color:"#8b96b0",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div>
-              </div>
-              <div style={{background:"#0d1320",borderRadius:8,padding:"8px 12px",textAlign:"right"}}>
-                <div style={{color:"#8b96b0",fontSize:9,marginBottom:1}}>HEUTE</div>
-                <div style={{color:pc(todPnl),fontWeight:800,fontSize:16}}>{fs(todPnl)}</div>
-                <div style={{color:"#8b96b0",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div>
-              </div>
+              <div><div style={{color:"#8b96b0",fontSize:10,fontWeight:600,letterSpacing:1,marginBottom:3}}>KONTO 09</div><div style={{color:pc(netPnl),fontWeight:800,fontSize:isDesktop?38:26}}>{netPnl>=0?"+":"-"}${Math.round(Math.abs(netPnl)).toLocaleString()}</div><div style={{color:"#8b96b0",fontSize:isDesktop?13:10,marginTop:1}}>Saldo: ${Math.round(saldo).toLocaleString()}</div></div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"8px 12px",textAlign:"right"}}><div style={{color:"#8b96b0",fontSize:9,marginBottom:1}}>HEUTE</div><div style={{color:pc(todPnl),fontWeight:800,fontSize:16}}>{fs(todPnl)}</div><div style={{color:"#8b96b0",fontSize:9,marginTop:1}}>{tradeCount}/{DAILY_LIMIT} Trades</div></div>
             </div>
-            <div style={{marginBottom:6}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#8b96b0",fontSize:10}}>Max DD Abstand</span>
-                <span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${Math.round(kontoabstand).toLocaleString()} ({Math.round(kontoabstand/BUFFER*100)}%)</span>
-              </div>
-              <Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/>
-            </div>
-            <div style={{marginBottom:8}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                <span style={{color:"#8b96b0",fontSize:10}}>Disziplin</span>
-                <span style={{color:sc(disc),fontWeight:700}}>{disc}% / {goals.disc}% Ziel</span>
-              </div>
-              <Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/>
-            </div>
+            <div style={{marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#8b96b0",fontSize:10}}>Max DD Abstand</span><span style={{color:kontoabstand<500?R:kontoabstand<1000?Y:G,fontWeight:700}}>${Math.round(kontoabstand).toLocaleString()} ({Math.round(kontoabstand/BUFFER*100)}%)</span></div><Bar2 pct={kontoabstand/BUFFER*100} color={kontoabstand<500?R:kontoabstand<1000?Y:G}/></div>
+            <div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#8b96b0",fontSize:10}}>Disziplin</span><span style={{color:sc(disc),fontWeight:700}}>{disc}% / {goals.disc}% Ziel</span></div><Bar2 pct={Math.min(100,disc/goals.disc*100)} color={sc(disc)}/></div>
             <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>MONAT P&L</div>
-                <div style={{color:pc(monthPnl),fontWeight:800,fontSize:14}}>{fs(monthPnl)}</div>
-                <div style={{color:"#4a5568",fontSize:8}}>diesen Monat</div>
-              </div>
-              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}>
-                <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>WIN RATE</div>
-                <div style={{color:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R,fontWeight:800,fontSize:14}}>{t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0}%</div>
-                <div style={{color:"#4a5568",fontSize:8}}>{t09.length} Trades</div>
-              </div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}><div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>MONAT P&L</div><div style={{color:pc(monthPnl),fontWeight:800,fontSize:14}}>{fs(monthPnl)}</div><div style={{color:"#4a5568",fontSize:8}}>diesen Monat</div></div>
+              <div style={{background:"#0d1320",borderRadius:8,padding:"7px 8px",textAlign:"center",flex:1}}><div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>WIN RATE</div><div style={{color:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R,fontWeight:800,fontSize:14}}>{t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0}%</div><div style={{color:"#4a5568",fontSize:8}}>{t09.length} Trades</div></div>
             </div>
             <div style={{paddingTop:8,borderTop:"1px solid #2d3548",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <Field label="SALDO ($)">
-                <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-              </Field>
-              <Field label="MAX DD ($)">
-                <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-              </Field>
+              <Field label="SALDO ($)"><input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+              <Field label="MAX DD ($)"><input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
             </div>
           </Card>
-
-          
-<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
-            {[{l:"TRADES",v:tradeCount+"/"+DAILY_LIMIT,c:tradesLeft>0?G:R},{l:"MONAT P&L",v:fs(monthPnl),c:pc(monthPnl)},{l:"WIN RATE",v:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)+"%",c:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R},{l:"DD ABSTAND",v:"$"+Math.round(kontoabstand),c:kontoabstand<1000?Y:G}].map(s=>(
-              <div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}>
-                <div style={{color:"#8b96b0",fontSize:9,marginBottom:3}}>{s.l}</div>
-                <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
-              </div>
-            ))}
-          </div>
-
-
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>{[{l:"TRADES",v:tradeCount+"/"+DAILY_LIMIT,c:tradesLeft>0?G:R},{l:"MONAT P&L",v:fs(monthPnl),c:pc(monthPnl)},{l:"WIN RATE",v:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)+"%",c:(t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0)>=50?G:R},{l:"DD ABSTAND",v:"$"+Math.round(kontoabstand),c:kontoabstand<1000?Y:G}].map(s=>(<div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:10,textAlign:"center"}}><div style={{color:"#8b96b0",fontSize:9,marginBottom:3}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div></div>))}</div>
           <Card style={{breakInside:"avoid",height:isDesktop?"auto":"auto"}}>
             <div style={{fontWeight:isDesktop?800:700,marginBottom:isDesktop?14:10,fontSize:isDesktop?18:15}}>{now.toLocaleString("de-DE",{month:"long",year:"numeric"})}</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>
-              {["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#8b96b0",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}
-            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>{["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=><div key={d} style={{textAlign:"center",color:"#8b96b0",fontSize:isDesktop?13:10,fontWeight:700,marginBottom:isDesktop?4:0}}>{d}</div>)}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isDesktop?6:3}}>{renderCal()}</div>
           </Card>
-
-
-          {/* WEG ZUR PROFITABILITÄT */}
           {profitPlan&&<Card style={{borderColor:"#6366f133",background:"linear-gradient(135deg,#0a0b12,#0f1117)"}} onClick={()=>setProfExpanded(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:4,height:4,borderRadius:"50%",background:"#6366f1",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDots 2.5s ease-in-out infinite",boxShadow:"0 0 4px rgba(99,102,241,0.8)"}}/>
-                <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Weg zur Profitabilität</div>
-                  <div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div>
-                </div>
-              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:4,height:4,borderRadius:"50%",background:"#6366f1",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDots 2.5s ease-in-out infinite",boxShadow:"0 0 4px rgba(99,102,241,0.8)"}}/><div><div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Weg zur Profitabilität</div><div style={{color:"#6366f1",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>POWERED BY MINDRISK AI</div></div></div>
               {!isDesktop&&<span style={{color:"#6366f1",fontSize:11,fontWeight:600}}>{profExpanded?"▲ schließen":"▼ öffnen"}</span>}
             </div>
-            {!profExpanded&&!isDesktop&&profitPlan&&<div style={{display:"flex",gap:8,marginBottom:2}}>
-              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#6b7a9a",fontSize:8}}>EV / TAG</div>
-                <div style={{color:profitPlan.dailyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.dailyEV>=0?"+":""}${profitPlan.dailyEV}</div>
-              </div>
-              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#6b7a9a",fontSize:8}}>PROGNOSE MONAT</div>
-                <div style={{color:profitPlan.monthlyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.monthlyEV>=0?"+":""}${profitPlan.monthlyEV}</div>
-              </div>
-              <div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}>
-                <div style={{color:"#6b7a9a",fontSize:8}}>OVERTRADING</div>
-                <div style={{color:profitPlan.overtradeDays>3?R:G,fontWeight:800,fontSize:13}}>{profitPlan.overtradeDays} Tage</div>
-              </div>
-            </div>}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-              {[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},
-                {l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:Y},
-                {l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}
-              ].map(s=>(
-                <div key={s.l} style={{background:"#0d1420",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}>
-                  <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
-                  <div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div>
-                </div>
-              ))}
-            </div>
-            {(profExpanded||isDesktop)&&(()=>{
-              const wr=profitPlan.wr/100;
-              const slT=40,tpT=80,slD=20,tpD=40,crv=2;
-              const evT=Math.round(wr*tpD-(1-wr)*slD);
-              const evD=evT*DAILY_LIMIT;
-              const today=new Date();const endM=new Date(today.getFullYear(),today.getMonth()+1,0);
-              let dLeft=0;for(let d=new Date(today);d<=endM;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft++;}
-              const projM=Math.round(dLeft*evD);
-              const missingNow=Math.max(0,goals.targetBalance-saldo);
-              const monateBis=evD>0?Math.ceil(missingNow/(evD*22)):null;
-              return(
-                <div style={{marginTop:12}}>
-                  {profitPlan.overtradeDays>0&&<div style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
-                    <span style={{fontSize:14}}>⚠️</span>
-                    <div style={{color:"#fca5a5",fontSize:11,fontWeight:600}}>{profitPlan.overtradeDays}/{profitPlan.totalDays} Tage Overtrading – Dein #1 Problem</div>
-                  </div>}
-                  <div style={{background:"#0d1420",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}>
-                    <div style={{color:"#6366f1",fontWeight:700,fontSize:11,marginBottom:8,letterSpacing:"0.5px"}}>SETUP 1 MNQ</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                      {[{l:"STOP LOSS",v:"40 Ticks",s:"$20",c:R},{l:"TAKE PROFIT",v:"80 Ticks",s:"$40",c:G},{l:"CRV",v:"2:1",s:"Risk/Reward",c:Y}].map(s=>(
-                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
-                          <div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
-                          <div style={{color:s.c,fontSize:9,opacity:0.7}}>{s.s}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                      {[
-                        {l:"EV / TRADE",v:(evT>=0?"+":"")+"$"+evT,c:evT>=0?G:R,s:"Ø Gewinn pro Trade"},
-                        {l:"EV / TAG",v:(evD>=0?"+":"")+"$"+evD,c:evD>=0?G:R,s:"2 Trades · Expected Value"},
-                        {l:"PROGNOSE MONAT",v:(projM>=0?"+":"")+"$"+projM,c:projM>=0?G:R,s:dLeft+" Handelstage"},
-                        {l:"MONATE BIS ZIEL",v:monateBis?monateBis+"Mo":"∞",c:monateBis&&monateBis<=6?G:Y,s:"bei akt. Performance"},
-                        {l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"},
-                      ].map(s=>(
-                        <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}>
-                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:800,fontSize:15}}>{s.v}</div>
-                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
-                      <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
-                    </div>
-                    {[
-                      profitPlan.wr<profitPlan.neededWR&&"📊 WR "+profitPlan.wr+"% liegt unter Break-Even "+profitPlan.neededWR+"%. Fokus auf Setup-Qualität statt Quantität.",
-                      profitPlan.overtradeDays>5&&"⚠️ "+profitPlan.overtradeDays+" Overtrading-Tage destroyen deinen EV. Strikt max "+DAILY_LIMIT+" Trades/Tag.",
-                      evT>0&&"✅ Positive Edge vorhanden. Mit Disziplin wirst du langfristig profitabel.",
-                      evT<=0&&"🔴 Negativer EV – Verluste übersteigen Gewinne statistisch. Setup oder Disziplin optimieren.",
-                    ].filter(Boolean).map((t,i)=>(
-                      <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
-                    ))}
-                    <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
-                  </div>
-                </div>
-              );
-            })()}
+            {!profExpanded&&!isDesktop&&profitPlan&&<div style={{display:"flex",gap:8,marginBottom:2}}><div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}><div style={{color:"#6b7a9a",fontSize:8}}>EV / TAG</div><div style={{color:profitPlan.dailyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.dailyEV>=0?"+":""}${profitPlan.dailyEV}</div></div><div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}><div style={{color:"#6b7a9a",fontSize:8}}>PROGNOSE MONAT</div><div style={{color:profitPlan.monthlyEV>=0?G:R,fontWeight:800,fontSize:13}}>{profitPlan.monthlyEV>=0?"+":""}${profitPlan.monthlyEV}</div></div><div style={{background:"#0d1420",borderRadius:7,padding:"5px 10px",flex:1,textAlign:"center"}}><div style={{color:"#6b7a9a",fontSize:8}}>OVERTRADING</div><div style={{color:profitPlan.overtradeDays>3?R:G,fontWeight:800,fontSize:13}}>{profitPlan.overtradeDays} Tage</div></div></div>}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>{[{l:"TREFFERQUOTE",v:profitPlan.wr+"%",c:profitPlan.wr>=50?G:R},{l:"DEIN R:R",v:profitPlan.rr+":1",c:parseFloat(profitPlan.rr)>=1?G:Y},{l:"BREAK-EVEN WR",v:profitPlan.neededWR+"%",c:profitPlan.wr>=profitPlan.neededWR?G:Y}].map(s=>(<div key={s.l} style={{background:"#0d1420",borderRadius:8,padding:"8px 6px",textAlign:"center",border:"1px solid #1e2030"}}><div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:16}}>{s.v}</div></div>))}</div>
+            {(profExpanded||isDesktop)&&(()=>{const wr=profitPlan.wr/100;const slD=20,tpD=40;const evT=Math.round(wr*tpD-(1-wr)*slD);const evD=evT*DAILY_LIMIT;const today=new Date();const endM=new Date(today.getFullYear(),today.getMonth()+1,0);let dLeft=0;for(let d=new Date(today);d<=endM;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft++;}const projM=Math.round(dLeft*evD);const missingNow=Math.max(0,goals.targetBalance-saldo);const monateBis=evD>0?Math.ceil(missingNow/(evD*22)):null;
+            return(<div style={{marginTop:12}}>{profitPlan.overtradeDays>0&&<div style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px",display:"flex",gap:8,marginBottom:10,alignItems:"center"}}><span style={{fontSize:14}}>⚠️</span><div style={{color:"#fca5a5",fontSize:11,fontWeight:600}}>{profitPlan.overtradeDays}/{profitPlan.totalDays} Tage Overtrading – Dein #1 Problem</div></div>}<div style={{background:"#0d1420",borderRadius:10,padding:12,marginBottom:10,border:"1px solid #1e2030"}}><div style={{color:"#6366f1",fontWeight:700,fontSize:11,marginBottom:8,letterSpacing:"0.5px"}}>SETUP 1 MNQ</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>{[{l:"STOP LOSS",v:"40 Ticks",s:"$20",c:R},{l:"TAKE PROFIT",v:"80 Ticks",s:"$40",c:G},{l:"CRV",v:"2:1",s:"Risk/Reward",c:Y}].map(s=>(<div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 6px",textAlign:"center"}}><div style={{color:"#6b7a9a",fontSize:8,marginBottom:2}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div><div style={{color:s.c,fontSize:9,opacity:0.7}}>{s.s}</div></div>))}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>{[{l:"EV / TRADE",v:(evT>=0?"+":"")+"$"+evT,c:evT>=0?G:R,s:"Ø Gewinn pro Trade"},{l:"EV / TAG",v:(evD>=0?"+":"")+"$"+evD,c:evD>=0?G:R,s:"2 Trades · Expected Value"},{l:"PROGNOSE MONAT",v:(projM>=0?"+":"")+"$"+projM,c:projM>=0?G:R,s:dLeft+" Handelstage"},{l:"MONATE BIS ZIEL",v:monateBis?monateBis+"Mo":"∞",c:monateBis&&monateBis<=6?G:Y,s:"bei akt. Performance"},{l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"}].map(s=>(<div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}><div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:15}}>{s.v}</div><div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div></div>))}</div></div><div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/><div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div></div>{[profitPlan.wr<profitPlan.neededWR&&"📊 WR "+profitPlan.wr+"% liegt unter Break-Even "+profitPlan.neededWR+"%. Fokus auf Setup-Qualität statt Quantität.",profitPlan.overtradeDays>5&&"⚠️ "+profitPlan.overtradeDays+" Overtrading-Tage destroyen deinen EV. Strikt max "+DAILY_LIMIT+" Trades/Tag.",evT>0&&"✅ Positive Edge vorhanden. Mit Disziplin wirst du langfristig profitabel.",evT<=0&&"🔴 Negativer EV – Verluste übersteigen Gewinne statistisch. Setup oder Disziplin optimieren."].filter(Boolean).map((t,i)=>(<div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>))}<div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div></div></div>);})()} 
           </Card>}
-
-
-          {/* MEIN MONATSZIEL */}
           <Card style={{borderColor:P+"33",background:"#0d0a14"}} onClick={()=>setMonatExp(p=>!p)}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/>
-                                <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Mein Monatsziel</div>
-                  <div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div>
-                </div>
-              </div>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"22",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️</button>
-                <span style={{color:P,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span>
-              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:4,height:4,borderRadius:"50%",background:"#a855f7",flexShrink:0,marginTop:5,marginLeft:5,animation:"watchDotsPurple 2.5s ease-in-out infinite 0.3s",boxShadow:"0 0 4px rgba(168,85,247,0.8)"}}/><div><div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Mein Monatsziel</div><div style={{color:P,fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KALKULATION</div></div></div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}><button onClick={e=>{e.stopPropagation();const v=prompt("Ziel-Saldo ($):",goals.targetBalance);if(v&&!isNaN(v)){const newG={...goals,targetBalance:parseFloat(v)};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:P+"22",color:P,fontSize:10,padding:"3px 8px",borderRadius:6,fontWeight:600}}>✏️</button><span style={{color:P,fontSize:11,fontWeight:600}}>{monatExp?"▲":"▼"}</span></div>
             </div>
-            {(()=>{
-              const startSaldo=Math.round((saldo-monthPnl)*100)/100;
-              const monthNeeded=Math.round(Math.max(1,goals.targetBalance-startSaldo));
-              const monthPct=Math.round(Math.min(100,Math.max(0,monthPnl/monthNeeded*100)));
-              const missing=Math.round(Math.max(0,goals.targetBalance-saldo));
-              const today2=new Date();const endM2=new Date(today2.getFullYear(),today2.getMonth()+1,0);
-              let dLeft2=0;for(let d=new Date(today2);d<=endM2;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft2++;}
-              const dailyNeed=dLeft2>0?Math.ceil(missing/dLeft2):0;
-              const tradeNeed=Math.ceil(dailyNeed/DAILY_LIMIT);
-              const slD=20,tpD=40;
-              return(
-                <div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                    {[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#f0f4ff"},
-                      {l:"ZIEL",v:"$"+goals.targetBalance.toLocaleString("de-DE"),c:P},
-                      {l:"NOCH FEHLT",v:missing<=0?"✅":"+$"+Math.round(missing).toLocaleString("de-DE"),c:missing<=0?G:R}
-                    ].map(s=>(
-                      <div key={s.l} style={{background:"#0f1428",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}>
-                        <div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div>
-                        <div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{marginBottom:6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                      <span style={{color:"#8b96b0",fontSize:10}}>Monatsfortschritt</span>
-                      <span style={{color:monthPct>=100?G:P,fontWeight:700,fontSize:10}}>{monthPct}% ({monthPnl>=0?"+":""}${Math.round(monthPnl)} von ${monthNeeded} nötig)</span>
-                    </div>
-                    <div style={{height:6,borderRadius:3,background:"#1e2540",overflow:"hidden"}}>
-                      <div style={{height:"100%",borderRadius:3,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/>
-                    </div>
-                  </div>
-                  {(monatExp||isDesktop)&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e1428"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-                      {[
-                        {l:"HANDELSTAGE NOCH",v:dLeft2+" Tage",c:dLeft2>5?G:dLeft2>2?Y:R,s:"diesen Monat"},
-                        {l:"GEWINN/TAG NÖTIG",v:missing<=0?"✅ Erreicht":"$"+dailyNeed,c:missing<=0?G:dailyNeed<100?G:Y,s:"um Ziel zu erreichen"},
-                        {l:"GEWINN/TRADE NÖTIG",v:missing<=0?"✅":"$"+tradeNeed,c:missing<=0?G:tradeNeed<50?G:Y,s:"bei 2 Trades/Tag"},
-                        {l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#f0f4ff",s:dLeft2+" Tage × "+DAILY_LIMIT},
-                        {l:"DIESEN MONAT P&L",v:(monthPnl>=0?"+":"")+"$"+monthPnl,c:pc(monthPnl),s:"seit Monatsstart"},
-                        {l:"REGELQUOTE",v:disc+"%",c:sc(disc),s:"Ziel: "+goals.disc+"%"},
-                      ].map(s=>(
-                        <div key={s.l} style={{background:"#0f1428",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}>
-                          <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
-                          <div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div>
-                          <div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{background:"linear-gradient(135deg,rgba(168,85,247,0.08),rgba(99,102,241,0.05))",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(168,85,247,0.15)"}}>
-                      <div style={{color:P,fontSize:11,fontWeight:700,marginBottom:4}}>🤖 KI Einschätzung:</div>
-                      <div style={{color:"#cbd5e1",fontSize:11,lineHeight:1.5}}>
-                        {missing<=0?"✅ Ziel bereits erreicht! Fokus auf Regelquote und Kapital schützen.":
-                        dailyNeed>80?"Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Tagen ist das Ziel diesen Monat schwer erreichbar. Realistisches Ziel setzen.":
-                        "Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Handelstagen erreichbar. "+DAILY_LIMIT+" Trades/Tag, SL $"+slD+", TP $"+tpD+" – Prozess über Profit."}
-                      </div>
-                    </div>
-                  </div>}
-                </div>
-              );
-            })()}
+            {(()=>{const startSaldo=Math.round((saldo-monthPnl)*100)/100;const monthNeeded=Math.round(Math.max(1,goals.targetBalance-startSaldo));const monthPct=Math.round(Math.min(100,Math.max(0,monthPnl/monthNeeded*100)));const missing=Math.round(Math.max(0,goals.targetBalance-saldo));const today2=new Date();const endM2=new Date(today2.getFullYear(),today2.getMonth()+1,0);let dLeft2=0;for(let d=new Date(today2);d<=endM2;d.setDate(d.getDate()+1)){const dw=d.getDay();if(dw!==0&&dw!==6)dLeft2++;}const dailyNeed=dLeft2>0?Math.ceil(missing/dLeft2):0;const tradeNeed=Math.ceil(dailyNeed/DAILY_LIMIT);const slD=20,tpD=40;
+            return(<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>{[{l:"AKTUELL",v:"$"+saldo.toLocaleString("de-DE",{maximumFractionDigits:0}),c:"#f0f4ff"},{l:"ZIEL",v:"$"+goals.targetBalance.toLocaleString("de-DE"),c:P},{l:"NOCH FEHLT",v:missing<=0?"✅":"+$"+Math.round(missing).toLocaleString("de-DE"),c:missing<=0?G:R}].map(s=>(<div key={s.l} style={{background:"#0f1428",borderRadius:8,padding:"7px 6px",textAlign:"center",border:"1px solid #1e1428"}}><div style={{color:"#6b7a9a",fontSize:9,marginBottom:2}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div></div>))}</div><div style={{marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#8b96b0",fontSize:10}}>Monatsfortschritt</span><span style={{color:monthPct>=100?G:P,fontWeight:700,fontSize:10}}>{monthPct}% ({monthPnl>=0?"+":""}${Math.round(monthPnl)} von ${monthNeeded} nötig)</span></div><div style={{height:6,borderRadius:3,background:"#1e2540",overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,width:monthPct+"%",background:"linear-gradient(90deg,"+B+","+P+")",transition:"width .4s"}}/></div></div>{(monatExp||isDesktop)&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e1428"}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>{[{l:"HANDELSTAGE NOCH",v:dLeft2+" Tage",c:dLeft2>5?G:dLeft2>2?Y:R,s:"diesen Monat"},{l:"GEWINN/TAG NÖTIG",v:missing<=0?"✅ Erreicht":"$"+dailyNeed,c:missing<=0?G:dailyNeed<100?G:Y,s:"um Ziel zu erreichen"},{l:"GEWINN/TRADE NÖTIG",v:missing<=0?"✅":"$"+tradeNeed,c:missing<=0?G:tradeNeed<50?G:Y,s:"bei 2 Trades/Tag"},{l:"MAX. TRADES NOCH",v:dLeft2*DAILY_LIMIT,c:"#f0f4ff",s:dLeft2+" Tage × "+DAILY_LIMIT},{l:"DIESEN MONAT P&L",v:(monthPnl>=0?"+":"")+"$"+monthPnl,c:pc(monthPnl),s:"seit Monatsstart"},{l:"REGELQUOTE",v:disc+"%",c:sc(disc),s:"Ziel: "+goals.disc+"%"}].map(s=>(<div key={s.l} style={{background:"#0f1428",borderRadius:7,padding:"7px 8px",border:"1px solid #1e1428"}}><div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div><div style={{color:s.c,fontWeight:700,fontSize:14}}>{s.v}</div><div style={{color:"#8b96b0",fontSize:9}}>{s.s}</div></div>))}</div><div style={{background:"linear-gradient(135deg,rgba(168,85,247,0.08),rgba(99,102,241,0.05))",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(168,85,247,0.15)"}}><div style={{color:P,fontSize:11,fontWeight:700,marginBottom:4}}>🤖 KI Einschätzung:</div><div style={{color:"#cbd5e1",fontSize:11,lineHeight:1.5}}>{missing<=0?"✅ Ziel bereits erreicht! Fokus auf Regelquote und Kapital schützen.":dailyNeed>80?"Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Tagen ist das Ziel diesen Monat schwer erreichbar. Realistisches Ziel setzen.":"Mit $"+dailyNeed+"/Tag bei "+dLeft2+" Handelstagen erreichbar. "+DAILY_LIMIT+" Trades/Tag, SL $"+slD+", TP $"+tpD+" – Prozess über Profit."}</div></div></div>}</div>);})()}
           </Card>
-
-
-          {/* TRADING PROBLEME CARD */}
           <Card style={{borderColor:"rgba(245,158,11,0.2)",background:"linear-gradient(145deg,#1a1508 0%,#0f1010 100%)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,cursor:"pointer"}} onClick={()=>setProbExp(p=>!p)}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle,#fcd34d,#f59e0b 60%,#92400e)",animation:"livingOrb 2s ease-in-out infinite",boxShadow:"0 0 10px rgba(245,158,11,0.6)",flexShrink:0}}/>
-                <div>
-                  <div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Meine Trading-Probleme</div>
-                  <div style={{color:"#f59e0b",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KI-DIAGNOSE</div>
-                </div>
-              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:14,height:14,borderRadius:"50%",background:"radial-gradient(circle,#fcd34d,#f59e0b 60%,#92400e)",animation:"livingOrb 2s ease-in-out infinite",boxShadow:"0 0 10px rgba(245,158,11,0.6)",flexShrink:0}}/><div><div style={{fontWeight:800,fontSize:15,color:"#f0f4ff"}}>Meine Trading-Probleme</div><div style={{color:"#f59e0b",fontSize:9,fontWeight:600,letterSpacing:"0.5px"}}>PERSÖNLICHE KI-DIAGNOSE</div></div></div>
               <span style={{color:"#f59e0b",fontSize:11,fontWeight:600}}>{probExp?"▲":"▼"}</span>
             </div>
-            {(()=>{
-              const PROBS=[
-                {k:"overtrading",l:"Overtrading",d:"Zu viele Trades pro Tag"},
-                {k:"fomo",l:"FOMO",d:"Fear of Missing Out"},
-                {k:"revenge",l:"Revenge Trading",d:"Nach Verlust sofort wieder einsteigen"},
-                {k:"early_exit",l:"Zu früh aussteigen",d:"TP nicht abwarten"},
-                {k:"no_sl",l:"SL nicht einhalten",d:"Stop Loss verschoben oder ignoriert"},
-                {k:"outside_window",l:"Falsche Zeiten",d:"Außerhalb des Zeitfensters traden"},
-                {k:"impulse",l:"Impuls-Trading",d:"Kein Setup, einfach rein"},
-                {k:"fear",l:"Angst vor Verlusten",d:"Zögern bei guten Setups"},
-              ];
-              const selected=Object.keys(problems).filter(k=>problems[k]);
-              return(
-                <div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
-                    {PROBS.map(p=>(
-                      <button key={p.k} onClick={()=>saveProblems({...problems,[p.k]:!problems[p.k]})}
-                        title={p.d}
-                        style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,
-                          background:problems[p.k]?"rgba(245,158,11,0.25)":"rgba(255,255,255,0.04)",
-                          border:"1px solid "+(problems[p.k]?"rgba(245,158,11,0.6)":"rgba(255,255,255,0.1)"),
-                          color:problems[p.k]?"#fcd34d":"#6b7a9a",
-                          transition:"all .2s"}}>
-                        {problems[p.k]?"✓ ":""}{p.l}
-                      </button>
-                    ))}
-                  </div>
-                  {selected.length>0&&(
-                    <button onClick={analyzeProblems} disabled={probLoading}
-                      style={{width:"100%",padding:"10px",borderRadius:10,fontWeight:700,fontSize:13,
-                        background:"linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.1))",
-                        border:"1px solid rgba(245,158,11,0.3)",color:probLoading?"#6b7280":"#fcd34d",marginBottom:8}}>
-                      {probLoading?"🤖 Analysiere...":"🤖 KI-Diagnose starten ("+selected.length+" Probleme)"}
-                    </button>
-                  )}
-                  {probExp&&probAnalysis&&(
-                    <div style={{background:"rgba(245,158,11,0.06)",borderRadius:10,padding:12,border:"1px solid rgba(245,158,11,0.15)"}}>
-                      <div style={{color:"#f59e0b",fontSize:11,fontWeight:700,marginBottom:6}}>🎯 Dein persönlicher Plan:</div>
-                      <div style={{color:"#a8b8d0",fontSize:11,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{probAnalysis}</div>
-                    </div>
-                  )}
-                  {!probAnalysis&&selected.length===0&&(
-                    <div style={{color:"#4a5568",fontSize:11,textAlign:"center",padding:"4px 0"}}>
-                      Wähle deine Probleme → KI gibt dir einen konkreten Plan
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {(()=>{const PROBS=[{k:"overtrading",l:"Overtrading",d:"Zu viele Trades pro Tag"},{k:"fomo",l:"FOMO",d:"Fear of Missing Out"},{k:"revenge",l:"Revenge Trading",d:"Nach Verlust sofort wieder einsteigen"},{k:"early_exit",l:"Zu früh aussteigen",d:"TP nicht abwarten"},{k:"no_sl",l:"SL nicht einhalten",d:"Stop Loss verschoben oder ignoriert"},{k:"outside_window",l:"Falsche Zeiten",d:"Außerhalb des Zeitfensters traden"},{k:"impulse",l:"Impuls-Trading",d:"Kein Setup, einfach rein"},{k:"fear",l:"Angst vor Verlusten",d:"Zögern bei guten Setups"}];const selected=Object.keys(problems).filter(k=>problems[k]);return(<div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>{PROBS.map(p=>(<button key={p.k} onClick={()=>saveProblems({...problems,[p.k]:!problems[p.k]})} title={p.d} style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:problems[p.k]?"rgba(245,158,11,0.25)":"rgba(255,255,255,0.04)",border:"1px solid "+(problems[p.k]?"rgba(245,158,11,0.6)":"rgba(255,255,255,0.1)"),color:problems[p.k]?"#fcd34d":"#6b7a9a",transition:"all .2s"}}>{problems[p.k]?"✓ ":""}{p.l}</button>))}</div>{selected.length>0&&(<button onClick={analyzeProblems} disabled={probLoading} style={{width:"100%",padding:"10px",borderRadius:10,fontWeight:700,fontSize:13,background:"linear-gradient(135deg,rgba(245,158,11,0.2),rgba(239,68,68,0.1))",border:"1px solid rgba(245,158,11,0.3)",color:probLoading?"#6b7280":"#fcd34d",marginBottom:8}}>{probLoading?"🤖 Analysiere...":"🤖 KI-Diagnose starten ("+selected.length+" Probleme)"}</button>)}{probExp&&probAnalysis&&(<div style={{background:"rgba(245,158,11,0.06)",borderRadius:10,padding:12,border:"1px solid rgba(245,158,11,0.15)"}}><div style={{color:"#f59e0b",fontSize:11,fontWeight:700,marginBottom:6}}>🎯 Dein persönlicher Plan:</div><div style={{color:"#a8b8d0",fontSize:11,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{probAnalysis}</div></div>)}{!probAnalysis&&selected.length===0&&(<div style={{color:"#4a5568",fontSize:11,textAlign:"center",padding:"4px 0"}}>Wähle deine Probleme → KI gibt dir einen konkreten Plan</div>)}</div>);})()}
           </Card>
           </div>
         ))}
-
         {/* REGELN TAB */}
         {tab==="check"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"minmax(400px,500px) 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
-          {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:12,padding:"12px 16px",display:"flex",gap:12,alignItems:"center"}}>
-            <span style={{fontSize:24}}>⏸</span>
-            <div><div style={{color:Y,fontWeight:800,fontSize:14}}>Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:38,letterSpacing:2,lineHeight:1}}>{pStr}</div></div>
-          </div>}
+          {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:12,padding:"12px 16px",display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:24}}>⏸</span><div><div style={{color:Y,fontWeight:800,fontSize:14}}>Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:38,letterSpacing:2,lineHeight:1}}>{pStr}</div></div></div>}
           {todayBlocked&&<div style={{background:R+"22",border:"1px solid "+R,borderRadius:10,padding:"10px 14px",display:"flex",gap:10}}><span>🚫</span><div style={{color:R,fontWeight:800}}>Heute gesperrt – Pause-Tag</div></div>}
           {atLimit&&!overtradingToday&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:10,padding:"10px 14px",display:"flex",gap:10}}><span>🛑</span><div style={{color:O,fontWeight:800}}>2 Trades – Tageslimit!</div></div>}
-          <Card style={{borderColor:now.getHours()>=16?G+"44":Y+"44"}}>
-            <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>Zeitfenster</div>
-            <div style={{color:now.getHours()>=16?G:Y,fontSize:24,fontWeight:800}}>{now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr</div>
-            <div style={{color:"#8b96b0",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Warte auf 16:15 Uhr"}</div>
-          </Card>
-          {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card>
-            <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>✅ Pre-Trade Checkliste</div>
-            <div style={{color:"#8b96b0",fontSize:11,marginBottom:12}}>Alle 4 Punkte abhaken vor dem Trade</div>
-            {[{id:"c1",q:"Geplantes Setup – kein Impuls?"},{id:"c2",q:"SL und TP definiert?"},{id:"c3",q:"Emotional ruhig und klar?"},{id:"c4",q:"Nach 16:15 Uhr?"}].map(it=>(
-              <Chk key={it.id} checked={checks[it.id]} onClick={()=>{const n={...checks,[it.id]:!checks[it.id]};setChecks(n);localStorage.setItem("ttp_checks",JSON.stringify({date:todayISO(),data:n}));}} label={it.q}/>
-            ))}
-            <div style={{marginTop:12,background:allChecked?G+"22":R+"11",border:"1px solid "+(allChecked?G:R)+"44",borderRadius:10,padding:12,textAlign:"center"}}>
-              {allChecked?<div style={{color:G,fontWeight:800,fontSize:17}}>GRUENES LICHT ✅</div>:<div style={{color:R,fontWeight:700,fontSize:15}}>Noch nicht bereit</div>}
-            </div>
-          </Card>}
-          <Card style={{background:"#12101a",borderColor:P+"33"}}>
-            <div style={{color:P,fontWeight:700,marginBottom:8}}>Meine Regeln</div>
-            {["1 MNQ – kein NQ bis profitabel","Max 2 Trades/Tag","15 Min Pause nach jedem Trade","Nur 16:15–17:30 Uhr","SL + TP vor dem Entry","Ein 3. Trade sperrt morgen"].map((r,i)=>(
-              <div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:"1px solid #2d3548",fontSize:13,color:"#c4b5fd"}}>
-                <span style={{color:P,fontWeight:700,flexShrink:0}}>{i+1}.</span>{r}
-              </div>
-            ))}
-          </Card>
+          <Card style={{borderColor:now.getHours()>=16?G+"44":Y+"44"}}><div style={{fontWeight:700,fontSize:16,marginBottom:4}}>Zeitfenster</div><div style={{color:now.getHours()>=16?G:Y,fontSize:24,fontWeight:800}}>{now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr</div><div style={{color:"#8b96b0",fontSize:12,marginTop:4}}>{now.getHours()>=16?"Optimales Fenster (16:15+)":"Warte auf 16:15 Uhr"}</div></Card>
+          {!inPause&&!todayBlocked&&!overtradingToday&&!atLimit&&<Card><div style={{fontWeight:700,fontSize:15,marginBottom:4}}>✅ Pre-Trade Checkliste</div><div style={{color:"#8b96b0",fontSize:11,marginBottom:12}}>Alle 4 Punkte abhaken vor dem Trade</div>{[{id:"c1",q:"Geplantes Setup – kein Impuls?"},{id:"c2",q:"SL und TP definiert?"},{id:"c3",q:"Emotional ruhig und klar?"},{id:"c4",q:"Nach 16:15 Uhr?"}].map(it=>(<Chk key={it.id} checked={checks[it.id]} onClick={()=>{const n={...checks,[it.id]:!checks[it.id]};setChecks(n);localStorage.setItem("ttp_checks",JSON.stringify({date:todayISO(),data:n}));}} label={it.q}/>))}<div style={{marginTop:12,background:allChecked?G+"22":R+"11",border:"1px solid "+(allChecked?G:R)+"44",borderRadius:10,padding:12,textAlign:"center"}}>{allChecked?<div style={{color:G,fontWeight:800,fontSize:17}}>GRUENES LICHT ✅</div>:<div style={{color:R,fontWeight:700,fontSize:15}}>Noch nicht bereit</div>}</div></Card>}
+          <Card style={{background:"#12101a",borderColor:P+"33"}}><div style={{color:P,fontWeight:700,marginBottom:8}}>Meine Regeln</div>{["1 MNQ – kein NQ bis profitabel","Max 2 Trades/Tag","15 Min Pause nach jedem Trade","Nur 16:15–17:30 Uhr","SL + TP vor dem Entry","Ein 3. Trade sperrt morgen"].map((r,i)=>(<div key={i} style={{display:"flex",gap:8,padding:"6px 0",borderBottom:"1px solid #2d3548",fontSize:13,color:"#c4b5fd"}}><span style={{color:P,fontWeight:700,flexShrink:0}}>{i+1}.</span>{r}</div>))}</Card>
         </div>}
 
         {/* LOGGEN TAB */}
         {tab==="log"&&<div style={{maxWidth:isDesktop?"700px":"100%",margin:isDesktop?"0 auto":"0"}}>
-          {!allChecked&&!inPause&&!todayBlocked&&!atLimit&&<div style={{background:"linear-gradient(135deg,rgba(239,68,68,0.12),rgba(245,158,11,0.08))",border:"2px solid rgba(239,68,68,0.5)",borderRadius:14,padding:"18px",marginBottom:14,textAlign:"center"}}>
-            <div style={{fontSize:40,marginBottom:8}}>🔒</div>
-            <div style={{color:R,fontWeight:800,fontSize:16,marginBottom:6}}>Routine zuerst!</div>
-            <div style={{color:"#fca5a5",fontSize:12,marginBottom:14,lineHeight:1.5}}>Gehe zuerst deine Pre-Trade Regeln durch.</div>
-            <button onClick={()=>setTab("check")} style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"12px 24px",fontWeight:700,fontSize:13,borderRadius:10}}>✅ Zu den Regeln</button>
-          </div>}
-          {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}>
-            <div style={{color:Y,fontWeight:800,fontSize:15,marginBottom:2}}>⏸ Pflichtpause</div>
-            <div style={{color:Y,fontWeight:800,fontSize:42,letterSpacing:2}}>{pStr}</div>
-          </div>}
+          {!allChecked&&!inPause&&!todayBlocked&&!atLimit&&<div style={{background:"linear-gradient(135deg,rgba(239,68,68,0.12),rgba(245,158,11,0.08))",border:"2px solid rgba(239,68,68,0.5)",borderRadius:14,padding:"18px",marginBottom:14,textAlign:"center"}}><div style={{fontSize:40,marginBottom:8}}>🔒</div><div style={{color:R,fontWeight:800,fontSize:16,marginBottom:6}}>Routine zuerst!</div><div style={{color:"#fca5a5",fontSize:12,marginBottom:14,lineHeight:1.5}}>Gehe zuerst deine Pre-Trade Regeln durch.</div><button onClick={()=>setTab("check")} style={{background:"linear-gradient(135deg,"+B+","+P+")",color:"#fff",padding:"12px 24px",fontWeight:700,fontSize:13,borderRadius:10}}>✅ Zu den Regeln</button></div>}
+          {inPause&&<div style={{background:"#1a0a00",border:"2px solid "+Y,borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}><div style={{color:Y,fontWeight:800,fontSize:15,marginBottom:2}}>⏸ Pflichtpause</div><div style={{color:Y,fontWeight:800,fontSize:42,letterSpacing:2}}>{pStr}</div></div>}
           {!inPause&&todayBlocked&&<div style={{background:R+"22",border:"1px solid "+R,borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}><div style={{color:R,fontWeight:800}}>🚫 Heute gesperrt</div></div>}
           {!inPause&&atLimit&&!todayBlocked&&<div style={{background:O+"22",border:"1px solid "+O,borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}><div style={{color:O,fontWeight:800}}>🛑 Tageslimit erreicht</div></div>}
-          {allChecked&&!inPause&&!todayBlocked&&!atLimit&&<div style={{background:"linear-gradient(135deg,rgba(0,211,149,0.12),rgba(99,102,241,0.08))",border:"1px solid rgba(0,211,149,0.5)",borderRadius:14,padding:"12px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"center"}}>
-            <span style={{fontSize:22}}>✅</span>
-            <div><div style={{color:G,fontWeight:800,fontSize:13}}>READY – Routine erfüllt</div><div style={{color:"#86efac",fontSize:11,marginTop:2}}>Alle 4 Regeln abgehakt.</div></div>
-          </div>}
+          {allChecked&&!inPause&&!todayBlocked&&!atLimit&&<div style={{background:"linear-gradient(135deg,rgba(0,211,149,0.12),rgba(99,102,241,0.08))",border:"1px solid rgba(0,211,149,0.5)",borderRadius:14,padding:"12px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:22}}>✅</span><div><div style={{color:G,fontWeight:800,fontSize:13}}>READY – Routine erfüllt</div><div style={{color:"#86efac",fontSize:11,marginTop:2}}>Alle 4 Regeln abgehakt.</div></div></div>}
           <Card>
             <div style={{fontWeight:700,fontSize:16,marginBottom:14}}>Trade loggen</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <Field label="DATUM">
-                  <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-                </Field>
-                <Field label="UHRZEIT">
-                  <input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-                </Field>
+                <Field label="DATUM"><input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                <Field label="UHRZEIT"><input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:13,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <Field label="KONTRAKT">
-                  <select value={form.contract} onChange={e=>setForm(f=>({...f,contract:e.target.value}))}>
-                    <option value="MNQ">MNQ ✓</option><option value="NQ">NQ</option><option value="ES">ES</option>
-                  </select>
-                </Field>
-                <Field label="RICHTUNG">
-                  <select value={form.dir} onChange={e=>setForm(f=>({...f,dir:e.target.value}))}>
-                    <option value="LONG">LONG ↑</option><option value="SHORT">SHORT ↓</option>
-                  </select>
-                </Field>
+                <Field label="KONTRAKT"><select value={form.contract} onChange={e=>setForm(f=>({...f,contract:e.target.value}))}><option value="MNQ">MNQ ✓</option><option value="NQ">NQ</option><option value="ES">ES</option></select></Field>
+                <Field label="RICHTUNG"><select value={form.dir} onChange={e=>setForm(f=>({...f,dir:e.target.value}))}><option value="LONG">LONG ↑</option><option value="SHORT">SHORT ↓</option></select></Field>
               </div>
-              <Field label="SETUP">
-                <select value={form.setup} onChange={e=>setForm(f=>({...f,setup:e.target.value}))}>
-                  {SETUPS.map(s=><option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="NETTO P&L ($) *">
-                <input type="number" step="0.01" value={form.pnl} onChange={e=>setForm(f=>({...f,pnl:e.target.value}))} placeholder="z.B. 40 oder -20" style={{borderColor:form.pnl?(parseFloat(form.pnl)>=0?G+"88":R+"88"):"#1e2d48"}}/>
-              </Field>
-              <div style={{background:"#0a160f",borderRadius:10,padding:"10px 12px",border:"1px solid "+G+"33"}}>
-                <div style={{color:G,fontSize:11,fontWeight:600}}>1 MNQ: SL 40 Ticks ($20) | TP 80 Ticks ($40)</div>
-              </div>
-              <div style={{background:"#0d1320",borderRadius:10,padding:12,border:"1px solid #2d3548"}}>
-                <div style={{color:"#8b96b0",fontSize:11,marginBottom:6,fontWeight:600}}>REGELN EINGEHALTEN?</div>
-                {RULES.map(r=>(<Chk key={r.id} checked={form.rules[r.id]} onClick={()=>setForm(f=>({...f,rules:{...f.rules,[r.id]:!f.rules[r.id]}}))} label={r.label}/>))}
-              </div>
-              <Field label="NOTIZEN">
-                <textarea rows={2} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Emotion? Was lief gut/schlecht?" style={{resize:"vertical"}}/>
-              </Field>
-              <button onClick={addTrade} style={{background:canTrade?B:"#4a5568",color:"#fff",padding:13,fontSize:14,fontWeight:700,width:"100%",borderRadius:10,opacity:canTrade?1:0.6}} disabled={!canTrade}>
-                {inPause?"⏸ Warten... "+pStr:todayBlocked?"Heute gesperrt":overtradingToday?"3 Trades – Gesperrt":atLimit?"Limit erreicht":!allChecked?"🔒 Erst Regeln abhaken":"Trade speichern – Timer startet!"}
-              </button>
+              <Field label="SETUP"><select value={form.setup} onChange={e=>setForm(f=>({...f,setup:e.target.value}))}>{SETUPS.map(s=><option key={s} value={s}>{s}</option>)}</select></Field>
+              <Field label="NETTO P&L ($) *"><input type="number" step="0.01" value={form.pnl} onChange={e=>setForm(f=>({...f,pnl:e.target.value}))} placeholder="z.B. 40 oder -20" style={{borderColor:form.pnl?(parseFloat(form.pnl)>=0?G+"88":R+"88"):"#1e2d48"}}/></Field>
+              <div style={{background:"#0a160f",borderRadius:10,padding:"10px 12px",border:"1px solid "+G+"33"}}><div style={{color:G,fontSize:11,fontWeight:600}}>1 MNQ: SL 40 Ticks ($20) | TP 80 Ticks ($40)</div></div>
+              <div style={{background:"#0d1320",borderRadius:10,padding:12,border:"1px solid #2d3548"}}><div style={{color:"#8b96b0",fontSize:11,marginBottom:6,fontWeight:600}}>REGELN EINGEHALTEN?</div>{RULES.map(r=>(<Chk key={r.id} checked={form.rules[r.id]} onClick={()=>setForm(f=>({...f,rules:{...f.rules,[r.id]:!f.rules[r.id]}}))} label={r.label}/>))}</div>
+              <Field label="NOTIZEN"><textarea rows={2} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Emotion? Was lief gut/schlecht?" style={{resize:"vertical"}}/></Field>
+              <button onClick={addTrade} style={{background:canTrade?B:"#4a5568",color:"#fff",padding:13,fontSize:14,fontWeight:700,width:"100%",borderRadius:10,opacity:canTrade?1:0.6}} disabled={!canTrade}>{inPause?"⏸ Warten... "+pStr:todayBlocked?"Heute gesperrt":overtradingToday?"3 Trades – Gesperrt":atLimit?"Limit erreicht":!allChecked?"🔒 Erst Regeln abhaken":"Trade speichern – Timer startet!"}</button>
             </div>
           </Card>
         </div>}
 
         {/* ANALYSE TAB */}
         {tab==="analyse"&&<div style={{display:isDesktop?"grid":"flex",gridTemplateColumns:isDesktop?"1fr 1fr":"none",flexDirection:"column",gap:isDesktop?20:12,alignItems:"start",width:"100%"}}>
-
-          {/* SCHNELL-STATS */}
-          {(()=>{
-            const wins=t09.filter(t=>t.pnl>0);
-            const losses=t09.filter(t=>t.pnl<0);
-            const avgW=wins.length?Math.round(wins.reduce((s,t)=>s+t.pnl,0)/wins.length):0;
-            const avgL=losses.length?Math.round(Math.abs(losses.reduce((s,t)=>s+t.pnl,0)/losses.length)):0;
-            const pf=avgL>0?(avgW*wins.length)/(avgL*losses.length):0;
-            return(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
-                {[{l:"TRADES",v:t09.length,c:B},{l:"Ø WIN",v:"+$"+avgW,c:G},{l:"Ø LOSS",v:"-$"+avgL,c:R},{l:"PROFIT F.",v:pf.toFixed(1)+"x",c:pf>=1?G:R}].map(s=>(
-                  <div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-                    <div style={{color:"#6b7a9a",fontSize:8,marginBottom:3}}>{s.l}</div>
-                    <div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* EQUITY KURVE */}
-          <Card>
-            <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Equity Kurve</div>
-            <ResponsiveContainer width="100%" height={140}>
-              <LineChart data={equity}>
-                <XAxis dataKey="i" tick={{fill:"#6b7a9a",fontSize:9}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:"#6b7a9a",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+v} width={55}/>
-                <Tooltip formatter={v=>[fd(v),"Kumuliert"]} contentStyle={{background:"#131d30",border:"1px solid #2d3548",borderRadius:8,fontSize:11}}/>
-                <ReferenceLine y={0} stroke="#1e2d48" strokeDasharray="4 4"/>
-                <Line type="monotone" dataKey="v" stroke={B} strokeWidth={2} dot={false}/>
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* STUNDEN-PERFORMANCE */}
-          {(()=>{
-            const hours={};
-            t09.forEach(t=>{const h=parseInt(t.time.split(":")[0]);if(!hours[h])hours[h]={n:0,wins:0,pnl:0};hours[h].n++;hours[h].pnl+=t.pnl;if(t.pnl>0)hours[h].wins++;});
-            const sorted=Object.entries(hours).sort(([a],[b])=>parseInt(a)-parseInt(b));
-            return sorted.length>0&&(
-              <Card>
-                <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Stunden-Performance</div>
-                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {sorted.map(([h,d])=>{
-                    const wr=Math.round(d.wins/d.n*100);
-                    const c=wr>=60?G:wr>=40?Y:R;
-                    const isWindow=parseInt(h)>=16&&parseInt(h)<=17;
-                    return(
-                      <div key={h} style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{color:isWindow?G:"#8b96b0",fontSize:11,fontWeight:isWindow?700:400,width:36,flexShrink:0}}>{h}:00{isWindow&&" ⚡"}</div>
-                        <div style={{flex:1,height:20,background:"#0d1320",borderRadius:4,overflow:"hidden",position:"relative"}}>
-                          <div style={{height:"100%",width:wr+"%",background:c+"44",borderRadius:4}}/>
-                          <div style={{position:"absolute",top:0,left:4,right:0,height:"100%",display:"flex",alignItems:"center"}}>
-                            <span style={{color:c,fontSize:10,fontWeight:700}}>{wr}% WR</span>
-                            <span style={{color:"#6b7a9a",fontSize:10,marginLeft:6}}>{d.n} Trades · {d.pnl>=0?"+":""}${Math.round(d.pnl)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            );
-          })()}
-
-          {/* SETUP-PERFORMANCE */}
-          {(()=>{
-            const setups={};
-            t09.forEach(t=>{const s=t.setup||"Unbekannt";if(!setups[s])setups[s]={n:0,wins:0,pnl:0};setups[s].n++;setups[s].pnl+=t.pnl;if(t.pnl>0)setups[s].wins++;});
-            const sorted=Object.entries(setups).sort(([,a],[,b])=>b.pnl-a.pnl);
-            return sorted.length>0&&(
-              <Card>
-                <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Setup-Performance</div>
-                {sorted.map(([name,d])=>{
-                  const wr=Math.round(d.wins/d.n*100);
-                  const c=wr>=60?G:wr>=40?Y:R;
-                  return(
-                    <div key={name} style={{marginBottom:8,padding:"8px 10px",background:"#0d1320",borderRadius:8,borderLeft:"3px solid "+c}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#f0f4ff"}}>{name}</div>
-                        <div style={{color:pc(d.pnl),fontWeight:800,fontSize:12}}>{d.pnl>=0?"+":""}${Math.round(d.pnl)}</div>
-                      </div>
-                      <div style={{display:"flex",gap:12}}>
-                        <span style={{color:c,fontSize:10,fontWeight:700}}>{wr}% WR</span>
-                        <span style={{color:"#6b7a9a",fontSize:10}}>{d.n} Trades</span>
-                        <span style={{color:"#6b7a9a",fontSize:10}}>Ø {d.wins} TP / {d.n-d.wins} SL</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </Card>
-            );
-          })()}
-
-          {/* STREAK + PSYCHOLOGIE */}
-          {(()=>{
-            let curStreak=0,maxWin=0,maxLoss=0,cur=0;
-            t09.forEach(t=>{if(t.pnl>0){cur=cur>0?cur+1:1;maxWin=Math.max(maxWin,cur);}else{cur=cur<0?cur-1:-1;maxLoss=Math.min(maxLoss,cur);}});
-            curStreak=cur;
-            const discHistory=t09.slice(-20).map((t,i)=>{const rv=t.rules||{};const kk=Object.keys(rv);return kk.length?Math.round(kk.filter(k=>rv[k]).length/kk.length*100):50;});
-            const avgDisc=discHistory.length?Math.round(discHistory.reduce((s,v)=>s+v,0)/discHistory.length):0;
-            return(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <Card>
-                  <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#f0f4ff"}}>Streak-Analyse</div>
-                  {[{l:"Aktuell",v:curStreak>0?"+"+curStreak+" Siege":curStreak<0?Math.abs(curStreak)+" Verluste":"Neutral",c:curStreak>0?G:curStreak<0?R:Y},
-                    {l:"Best. Siegesserie",v:maxWin+" Trades",c:G},
-                    {l:"Schlechteste Serie",v:Math.abs(maxLoss)+" Verluste",c:R},
-                  ].map(s=>(
-                    <div key={s.l} style={{marginBottom:6}}>
-                      <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
-                      <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
-                    </div>
-                  ))}
-                </Card>
-                <Card>
-                  <div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#f0f4ff"}}>Mentaler Score</div>
-                  {[{l:"Regelquote Ø",v:avgDisc+"%",c:sc(avgDisc)},
-                    {l:"Disziplin-Trend",v:disc>avgDisc?"↗ Im Aufbau":disc<avgDisc?"↘ Ausbaufähig":"→ Konstant",c:disc>=avgDisc?G:Y},
-                    {l:"Overtrading-Tage",v:profitPlan?profitPlan.overtradeDays+"T":"–",c:profitPlan&&profitPlan.overtradeDays>3?R:G},
-                  ].map(s=>(
-                    <div key={s.l} style={{marginBottom:6}}>
-                      <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
-                      <div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div>
-                    </div>
-                  ))}
-                </Card>
-              </div>
-            );
-          })()}
-
-          {/* BESTE HANDELSTAGE */}
-          <Card>
-            <div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#f0f4ff"}}>Handelstage nach Wochentag</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
-              {weekdayStats.map(d=>{
-                const c=d.pct>=60?G:d.pct>=40?Y:R;
-                return(
-                  <div key={d.label} style={{background:"#0d1320",borderRadius:8,padding:"8px 4px",textAlign:"center",border:"1px solid "+(d.days>0?c+"33":"#1e2d48")}}>
-                    <div style={{fontWeight:700,fontSize:13,marginBottom:2,color:d.days>0?c:"#4a5568"}}>{d.label}</div>
-                    {d.days>0?(<>
-                      <div style={{color:c,fontWeight:800,fontSize:16}}>{d.pct}%</div>
-                      <div style={{color:pc(d.pnl),fontSize:10,fontWeight:600}}>{d.pnl>=0?"+":"-"}${Math.abs(d.pnl).toFixed(0)}</div>
-                      <div style={{color:"#4a5568",fontSize:8}}>{d.days}T</div>
-                    </>):<div style={{color:"#4a5568",fontSize:10,marginTop:6}}>–</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          {/* HALTEDAUER */}
-          <Card>
-            <div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#f0f4ff"}}>Haltedauer</div>
-            {durBuckets.map(b=>(
-              <div key={b.label} style={{marginBottom:8,display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:52,color:"#8b96b0",fontSize:11,flexShrink:0}}>{b.label}</div>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                    <span style={{color:"#6b7a9a",fontSize:9}}>{b.n} Trades</span>
-                    <span style={{color:sc(b.wr),fontSize:9,fontWeight:700}}>{b.wr}% · {b.pnl>=0?"+":""}${Math.round(b.pnl)}</span>
-                  </div>
-                  <Bar2 pct={b.wr} color={sc(b.wr)}/>
-                </div>
-              </div>
-            ))}
-          </Card>
-
-          {/* PSYCHOLOGIE JOURNAL */}
-          <Card style={{borderColor:P+"33"}}>
-            <div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Tages-Reflexion</div>
-            {[{id:"good",label:"Was lief gut?",p:"Setup, Disziplin..."},{id:"bad",label:"Was verbessern?",p:"Impuls, zu früh..."},{id:"emotion",label:"Emotionaler Zustand?",p:"Ruhig, fokussiert..."}].map(q=>(
-              <div key={q.id} style={{marginBottom:8}}>
-                <label style={{color:"#8b96b0",fontSize:10,display:"block",marginBottom:3}}>{q.label}</label>
-                <textarea rows={2} value={todayJ[q.id]||""} onChange={e=>setTodayJ(p=>({...p,[q.id]:e.target.value}))} placeholder={q.p} style={{resize:"vertical"}}/>
-              </div>
-            ))}
-            <button onClick={()=>{const u={...journal,[todayISO()]:{...todayJ}};setJournal(u);localStorage.setItem("ttp_journal",JSON.stringify(u));showToast("Reflexion gespeichert!");}} style={{background:P,color:"#fff",padding:10,width:"100%",fontWeight:700,borderRadius:10,fontSize:13}}>Speichern</button>
-          </Card>
+          {(()=>{const wins=t09.filter(t=>t.pnl>0);const losses=t09.filter(t=>t.pnl<0);const avgW=wins.length?Math.round(wins.reduce((s,t)=>s+t.pnl,0)/wins.length):0;const avgL=losses.length?Math.round(Math.abs(losses.reduce((s,t)=>s+t.pnl,0)/losses.length)):0;const pf=avgL>0?(avgW*wins.length)/(avgL*losses.length):0;return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>{[{l:"TRADES",v:t09.length,c:B},{l:"Ø WIN",v:"+$"+avgW,c:G},{l:"Ø LOSS",v:"-$"+avgL,c:R},{l:"PROFIT F.",v:pf.toFixed(1)+"x",c:pf>=1?G:R}].map(s=>(<div key={s.l} style={{background:"#131d30",border:"1px solid #2d3548",borderRadius:10,padding:"10px 8px",textAlign:"center"}}><div style={{color:"#6b7a9a",fontSize:8,marginBottom:3}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:13}}>{s.v}</div></div>))}</div>);})()}
+          <Card><div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Equity Kurve</div><ResponsiveContainer width="100%" height={140}><LineChart data={equity}><XAxis dataKey="i" tick={{fill:"#6b7a9a",fontSize:9}} axisLine={false} tickLine={false}/><YAxis tick={{fill:"#6b7a9a",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+v} width={55}/><Tooltip formatter={v=>[fd(v),"Kumuliert"]} contentStyle={{background:"#131d30",border:"1px solid #2d3548",borderRadius:8,fontSize:11}}/><ReferenceLine y={0} stroke="#1e2d48" strokeDasharray="4 4"/><Line type="monotone" dataKey="v" stroke={B} strokeWidth={2} dot={false}/></LineChart></ResponsiveContainer></Card>
+          {(()=>{const hours={};t09.forEach(t=>{const h=parseInt(t.time.split(":")[0]);if(!hours[h])hours[h]={n:0,wins:0,pnl:0};hours[h].n++;hours[h].pnl+=t.pnl;if(t.pnl>0)hours[h].wins++;});const sorted=Object.entries(hours).sort(([a],[b])=>parseInt(a)-parseInt(b));return sorted.length>0&&(<Card><div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Stunden-Performance</div><div style={{display:"flex",flexDirection:"column",gap:6}}>{sorted.map(([h,d])=>{const wr=Math.round(d.wins/d.n*100);const c=wr>=60?G:wr>=40?Y:R;const isWindow=parseInt(h)>=16&&parseInt(h)<=17;return(<div key={h} style={{display:"flex",alignItems:"center",gap:8}}><div style={{color:isWindow?G:"#8b96b0",fontSize:11,fontWeight:isWindow?700:400,width:36,flexShrink:0}}>{h}:00{isWindow&&" ⚡"}</div><div style={{flex:1,height:20,background:"#0d1320",borderRadius:4,overflow:"hidden",position:"relative"}}><div style={{height:"100%",width:wr+"%",background:c+"44",borderRadius:4}}/><div style={{position:"absolute",top:0,left:4,right:0,height:"100%",display:"flex",alignItems:"center"}}><span style={{color:c,fontSize:10,fontWeight:700}}>{wr}% WR</span><span style={{color:"#6b7a9a",fontSize:10,marginLeft:6}}>{d.n} Trades · {d.pnl>=0?"+":""}${Math.round(d.pnl)}</span></div></div></div>);})}</div></Card>);})()}
+          {(()=>{const setups={};t09.forEach(t=>{const s=t.setup||"Unbekannt";if(!setups[s])setups[s]={n:0,wins:0,pnl:0};setups[s].n++;setups[s].pnl+=t.pnl;if(t.pnl>0)setups[s].wins++;});const sorted=Object.entries(setups).sort(([,a],[,b])=>b.pnl-a.pnl);return sorted.length>0&&(<Card><div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Setup-Performance</div>{sorted.map(([name,d])=>{const wr=Math.round(d.wins/d.n*100);const c=wr>=60?G:wr>=40?Y:R;return(<div key={name} style={{marginBottom:8,padding:"8px 10px",background:"#0d1320",borderRadius:8,borderLeft:"3px solid "+c}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><div style={{fontSize:11,fontWeight:700,color:"#f0f4ff"}}>{name}</div><div style={{color:pc(d.pnl),fontWeight:800,fontSize:12}}>{d.pnl>=0?"+":""}${Math.round(d.pnl)}</div></div><div style={{display:"flex",gap:12}}><span style={{color:c,fontSize:10,fontWeight:700}}>{wr}% WR</span><span style={{color:"#6b7a9a",fontSize:10}}>{d.n} Trades</span><span style={{color:"#6b7a9a",fontSize:10}}>Ø {d.wins} TP / {d.n-d.wins} SL</span></div></div>);}}</Card>);})()}
+          {(()=>{let curStreak=0,maxWin=0,maxLoss=0,cur=0;t09.forEach(t=>{if(t.pnl>0){cur=cur>0?cur+1:1;maxWin=Math.max(maxWin,cur);}else{cur=cur<0?cur-1:-1;maxLoss=Math.min(maxLoss,cur);}});curStreak=cur;const discHistory=t09.slice(-20).map((t,i)=>{const rv=t.rules||{};const kk=Object.keys(rv);return kk.length?Math.round(kk.filter(k=>rv[k]).length/kk.length*100):50;});const avgDisc=discHistory.length?Math.round(discHistory.reduce((s,v)=>s+v,0)/discHistory.length):0;return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}><Card><div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#f0f4ff"}}>Streak-Analyse</div>{[{l:"Aktuell",v:curStreak>0?"+"+curStreak+" Siege":curStreak<0?Math.abs(curStreak)+" Verluste":"Neutral",c:curStreak>0?G:curStreak<0?R:Y},{l:"Best. Siegesserie",v:maxWin+" Trades",c:G},{l:"Schlechteste Serie",v:Math.abs(maxLoss)+" Verluste",c:R}].map(s=>(<div key={s.l} style={{marginBottom:6}}><div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div></div>))}</Card><Card><div style={{fontWeight:700,fontSize:13,marginBottom:10,color:"#f0f4ff"}}>Mentaler Score</div>{[{l:"Regelquote Ø",v:avgDisc+"%",c:sc(avgDisc)},{l:"Disziplin-Trend",v:disc>avgDisc?"↗ Im Aufbau":disc<avgDisc?"↘ Ausbaufähig":"→ Konstant",c:disc>=avgDisc?G:Y},{l:"Overtrading-Tage",v:profitPlan?profitPlan.overtradeDays+"T":"–",c:profitPlan&&profitPlan.overtradeDays>3?R:G}].map(s=>(<div key={s.l} style={{marginBottom:6}}><div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div><div style={{color:s.c,fontWeight:800,fontSize:14}}>{s.v}</div></div>))}</Card></div>);})()}
+          <Card><div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#f0f4ff"}}>Handelstage nach Wochentag</div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>{weekdayStats.map(d=>{const c=d.pct>=60?G:d.pct>=40?Y:R;return(<div key={d.label} style={{background:"#0d1320",borderRadius:8,padding:"8px 4px",textAlign:"center",border:"1px solid "+(d.days>0?c+"33":"#1e2d48")}}><div style={{fontWeight:700,fontSize:13,marginBottom:2,color:d.days>0?c:"#4a5568"}}>{d.label}</div>{d.days>0?(<><div style={{color:c,fontWeight:800,fontSize:16}}>{d.pct}%</div><div style={{color:pc(d.pnl),fontSize:10,fontWeight:600}}>{d.pnl>=0?"+":"-"}${Math.abs(d.pnl).toFixed(0)}</div><div style={{color:"#4a5568",fontSize:8}}>{d.days}T</div></>):<div style={{color:"#4a5568",fontSize:10,marginTop:6}}>–</div>}</div>);})}</div></Card>
+          <Card><div style={{fontWeight:700,marginBottom:8,fontSize:14,color:"#f0f4ff"}}>Haltedauer</div>{durBuckets.map(b=>(<div key={b.label} style={{marginBottom:8,display:"flex",alignItems:"center",gap:8}}><div style={{width:52,color:"#8b96b0",fontSize:11,flexShrink:0}}>{b.label}</div><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}><span style={{color:"#6b7a9a",fontSize:9}}>{b.n} Trades</span><span style={{color:sc(b.wr),fontSize:9,fontWeight:700}}>{b.wr}% · {b.pnl>=0?"+":""}${Math.round(b.pnl)}</span></div><Bar2 pct={b.wr} color={sc(b.wr)}/></div></div>))}</Card>
+          <Card style={{borderColor:P+"33"}}><div style={{fontWeight:700,marginBottom:10,fontSize:14,color:"#f0f4ff"}}>Tages-Reflexion</div>{[{id:"good",label:"Was lief gut?",p:"Setup, Disziplin..."},{id:"bad",label:"Was verbessern?",p:"Impuls, zu früh..."},{id:"emotion",label:"Emotionaler Zustand?",p:"Ruhig, fokussiert..."}].map(q=>(<div key={q.id} style={{marginBottom:8}}><label style={{color:"#8b96b0",fontSize:10,display:"block",marginBottom:3}}>{q.label}</label><textarea rows={2} value={todayJ[q.id]||""} onChange={e=>setTodayJ(p=>({...p,[q.id]:e.target.value}))} placeholder={q.p} style={{resize:"vertical"}}/></div>))}<button onClick={()=>{const u={...journal,[todayISO()]:{...todayJ}};setJournal(u);localStorage.setItem("ttp_journal",JSON.stringify(u));showToast("Reflexion gespeichert!");}} style={{background:P,color:"#fff",padding:10,width:"100%",fontWeight:700,borderRadius:10,fontSize:13}}>Speichern</button></Card>
         </div>}
-
         {tab==="hist"&&<div style={{display:"flex",flexDirection:"column",gap:10,width:"100%"}}>
           <Card style={{borderColor:"rgba(99,102,241,0.3)"}}>
             <div style={{fontWeight:700,fontSize:14,color:"#f0f4ff",marginBottom:8}}>📥 TTP Trade Import</div>
             <div style={{color:"#8b96b0",fontSize:11,marginBottom:8}}>TTP Report → Trades markieren → Kopieren → hier einfügen:</div>
-            <textarea id="ttp_import_box" rows={4} placeholder="NQ-202606-CME&#9;18.5.2026, 16:54:51&#9;..." style={{width:"100%",fontSize:10,marginBottom:8,fontFamily:"monospace",resize:"vertical"}}/>
-            <button onClick={()=>{const v=document.getElementById('ttp_import_box').value;importTTPTrades(v);document.getElementById('ttp_import_box').value='';}}
-              style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"10px",width:"100%",fontWeight:700,borderRadius:10,fontSize:13}}>
-              📥 Trades importieren
-            </button>
+            <textarea id="ttp_import_box" rows={4} placeholder={"NQ-202606-CME\t18.5.2026, 16:54:51\t..."} style={{width:"100%",fontSize:10,marginBottom:8,fontFamily:"monospace",resize:"vertical"}}/>
+            <button onClick={()=>{const v=document.getElementById('ttp_import_box').value;importTTPTrades(v);document.getElementById('ttp_import_box').value='';}} style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"10px",width:"100%",fontWeight:700,borderRadius:10,fontSize:13}}>📥 Trades importieren</button>
           </Card>
           <Card>
             <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>🔍 Filter</div>
@@ -1862,18 +1046,8 @@ const sendAiMessage=async()=>{
             const sum=filtered.reduce((s,t)=>s+t.pnl,0);
             const wr=filtered.length?Math.round(filtered.filter(t=>t.pnl>0).length/filtered.length*100):0;
             return(<>
-              <Card style={{borderColor:B+"44"}}>
-                <div style={{display:"flex",justifyContent:"space-between"}}>
-                  <div><div style={{color:"#8b96b0",fontSize:10}}>{filtered.length} Trades</div><div style={{color:pc(sum),fontWeight:800,fontSize:24}}>{sum>=0?"+":"-"}${Math.abs(sum).toFixed(2)}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{color:"#8b96b0",fontSize:10}}>WR</div><div style={{color:wr>=50?G:R,fontWeight:800,fontSize:20}}>{wr}%</div></div>
-                </div>
-              </Card>
-              {[...filtered].reverse().map(t=>(
-                <div key={t.id} style={{background:"#131d30",borderRadius:10,padding:"10px 12px",borderLeft:"3px solid "+pc(t.pnl),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div><div style={{display:"flex",gap:6,marginBottom:2}}><span style={{fontWeight:800,color:pc(t.pnl)}}>{fd(t.pnl)}</span><span style={{fontSize:10,color:"#8b96b0"}}>{t.contract} · {t.dir}</span></div><div style={{color:"#8b96b0",fontSize:10}}>{t.date} {t.time}</div></div>
-                  <button onClick={()=>setDelId(t.id)} style={{background:"none",color:R,fontSize:16,padding:"2px 4px",opacity:0.5}}>×</button>
-                </div>
-              ))}
+              <Card style={{borderColor:B+"44"}}><div style={{display:"flex",justifyContent:"space-between"}}><div><div style={{color:"#8b96b0",fontSize:10}}>{filtered.length} Trades</div><div style={{color:pc(sum),fontWeight:800,fontSize:24}}>{sum>=0?"+":"-"}${Math.abs(sum).toFixed(2)}</div></div><div style={{textAlign:"right"}}><div style={{color:"#8b96b0",fontSize:10}}>WR</div><div style={{color:wr>=50?G:R,fontWeight:800,fontSize:20}}>{wr}%</div></div></div></Card>
+              {[...filtered].reverse().map(t=>(<div key={t.id} style={{background:"#131d30",borderRadius:10,padding:"10px 12px",borderLeft:"3px solid "+pc(t.pnl),display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{display:"flex",gap:6,marginBottom:2}}><span style={{fontWeight:800,color:pc(t.pnl)}}>{fd(t.pnl)}</span><span style={{fontSize:10,color:"#8b96b0"}}>{t.contract} · {t.dir}</span></div><div style={{color:"#8b96b0",fontSize:10}}>{t.date} {t.time}</div></div><button onClick={()=>setDelId(t.id)} style={{background:"none",color:R,fontSize:16,padding:"2px 4px",opacity:0.5}}>×</button></div>))}
             </>);
           })()}
           {!dateFrom&&!dateTo&&<Card>
@@ -1884,10 +1058,7 @@ const sendAiMessage=async()=>{
                 <div key={ms.mo} style={{marginBottom:8,background:"#0d1320",borderRadius:10,padding:"10px 12px",border:isExp?"1px solid "+B+"55":"1px solid transparent"}}>
                   <div onClick={()=>setExpandedMonth(isExp?null:ms.mo)} style={{cursor:"pointer"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <span style={{color:"#8b96b0",fontSize:11,display:"inline-block",transform:isExp?"rotate(90deg)":"none"}}>▶</span>
-                        <div style={{fontWeight:700,fontSize:13}}>{ms.mo}</div>
-                      </div>
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{color:"#8b96b0",fontSize:11,display:"inline-block",transform:isExp?"rotate(90deg)":"none"}}>▶</span><div style={{fontWeight:700,fontSize:13}}>{ms.mo}</div></div>
                       <div style={{color:pc(ms.pnl),fontWeight:800,fontSize:15}}>{ms.pnl>=0?"+":"-"}${Math.abs(ms.pnl).toFixed(0)}</div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,fontSize:10}}>
@@ -1912,7 +1083,6 @@ const sendAiMessage=async()=>{
         </div>}
 
       </div>
-
       {/* BOTTOM NAV */}
       <div style={{position:"fixed",bottom:0,left:0,right:0,width:"100%",background:"rgba(15,10,30,0.97)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(99,102,241,0.4)",boxShadow:"0 -4px 24px rgba(99,102,241,0.15),0 -1px 0 rgba(168,85,247,0.2)",display:"flex",zIndex:100,paddingBottom:isDesktop?"0":"env(safe-area-inset-bottom,8px)"}}>
         {NAVS.map(nav=>(
@@ -1942,7 +1112,6 @@ const sendAiMessage=async()=>{
             </button>
           </div>
 
-          {/* ZIELE – ACCORDION */}
           {[
             {id:"goals",label:"Meine Ziele",sub:"Monatsziel, 3M, 6M"},
             {id:"rules",label:"Trading Regeln",sub:"Limits, Zeiten, Pause"},
@@ -1969,7 +1138,7 @@ const sendAiMessage=async()=>{
                   </div>
                 </div>
                 <Field label="ZIEL-SALDO ($)">
-                  <input type="number" defaultValue={goals.targetBalance} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){const newG={...goals,targetBalance:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));} }} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
+                  <input type="number" defaultValue={goals.targetBalance} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){const newG={...goals,targetBalance:v};setGoals(newG);localStorage.setItem('ttp_goals',JSON.stringify(newG));}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
                 </Field>
                 <div style={{marginTop:8,background:"rgba(99,102,241,0.08)",borderRadius:8,padding:"8px 10px",border:"1px solid rgba(99,102,241,0.15)"}}>
                   <div style={{color:"#8b96b0",fontSize:10}}>Aktuell: <span style={{color:"#f0f4ff",fontWeight:700}}>${saldo.toFixed(0)}</span> · Noch fehlen: <span style={{color:R,fontWeight:700}}>${Math.max(0,goals.targetBalance-saldo).toFixed(0)}</span></div>
@@ -2026,20 +1195,16 @@ const sendAiMessage=async()=>{
         </div>
       </div>}
 
-      {/* AI COACH – FUTURISTISCH */}
+      {/* AI COACH */}
       <div style={{position:"fixed",bottom:88,right:16,zIndex:200}}>
         {!aiOpen&&(
           <button onClick={()=>{setAiOpen(true);if(aiMessages.length===0){setAiMessages([{role:"assistant",content:smartCoach("","daily_motivation")}]);}}}
             style={{width:54,height:54,borderRadius:"50%",border:"none",padding:0,position:"relative",overflow:"visible",cursor:"pointer",background:"transparent",WebkitTapHighlightColor:"transparent"}}>
-            {/* Pulsing rings – echter Herzschlag */}
             <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"rgba(99,102,241,0.5)",animation:"orbRing1 1.4s ease-out infinite",pointerEvents:"none"}}/>
             <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"rgba(168,85,247,0.4)",animation:"orbRing2 1.4s ease-out infinite 0.45s",pointerEvents:"none"}}/>
             <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"rgba(99,102,241,0.25)",animation:"orbRing3 1.4s ease-out infinite 0.9s",pointerEvents:"none"}}/>
-            {/* Main sphere – atmet */}
             <div style={{position:"absolute",inset:0,borderRadius:"50%",background:"radial-gradient(circle at 35% 28%,#e0d4ff 0%,#c4b5fd 15%,#a78bfa 35%,#7c3aed 60%,#4c1d95 85%,#1e1b4b 100%)",animation:"livingOrb 2.2s ease-in-out infinite",boxShadow:"0 0 25px rgba(99,102,241,0.7),0 0 50px rgba(168,85,247,0.4),inset 0 0 15px rgba(255,255,255,0.15)"}}/>
-            {/* Rotierender Ring */}
             <div style={{position:"absolute",inset:3,borderRadius:"50%",border:"1.5px solid transparent",borderTopColor:"rgba(255,255,255,0.6)",borderRightColor:"rgba(196,181,253,0.4)",animation:"orbSpin 4s linear infinite",pointerEvents:"none"}}/>
-            {/* Kern-Licht */}
             <div style={{position:"absolute",top:"20%",left:"22%",width:20,height:20,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(221,214,254,0.6) 50%,transparent 75%)",filter:"blur(3px)",animation:"orbCore 2s ease-in-out infinite",pointerEvents:"none"}}/>
           </button>
         )}
@@ -2059,7 +1224,11 @@ const sendAiMessage=async()=>{
                   <div style={{color:B,fontSize:10,fontWeight:600}}>Claude AI ✦</div>
                 </div>
               </div>
-              <button onClick={()=>setAiOpen(false)} style={{background:"rgba(255,255,255,0.08)",color:"#8b96b0",fontSize:16,padding:"4px 8px",borderRadius:6}}>×</button>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {/* *** PATCH 4: Chat löschen Button – löscht auch localStorage *** */}
+                <button onClick={()=>{setAiMessages([]);localStorage.removeItem("ttp_chat_history");showToast("Chat geloescht");}} title="Chat löschen" style={{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",color:"#ef4444",fontSize:11,padding:"4px 8px",borderRadius:6,fontWeight:600}}>🗑</button>
+                <button onClick={()=>setAiOpen(false)} style={{background:"rgba(255,255,255,0.08)",color:"#8b96b0",fontSize:16,padding:"4px 8px",borderRadius:6}}>×</button>
+              </div>
             </div>
             <div style={{flex:1,overflow:"auto",padding:12,display:"flex",flexDirection:"column",gap:8,minHeight:120}}>
               {aiMessages.length===0&&!aiLoading&&(
@@ -2116,7 +1285,7 @@ const sendAiMessage=async()=>{
               </button>
               <textarea value={aiInput} onChange={e=>setAiInput(e.target.value)}
                 onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendAiMessage())}
-                placeholder={isRecording?"🎤 Höre zu...":"Frag deinen Coach..."}
+                placeholder={isRecording?"🎤 Höre zu...":"Frag deinen Coach... (oder: 'Speichere: MNQ LONG +40 16:30')"}
                 rows={2}
                 style={{flex:1,fontSize:13,padding:"10px 14px",borderRadius:16,background:"#0d1320",border:"1px solid #2d3548",resize:"none",lineHeight:1.4,maxHeight:80,overflowY:"auto",color:"#f0f4ff",fontFamily:"inherit"}}/>
               <button id="aiSendBtn" onClick={sendAiMessage} disabled={aiLoading||(!aiInput.trim()&&!aiImage)}
@@ -2129,5 +1298,3 @@ const sendAiMessage=async()=>{
     </div>
   );
 }
-
-    
