@@ -70,8 +70,9 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
+    const textContent = data.content.filter(c=>c.type==='text').map(c=>c.text).join('\n');
     return res.status(200).json({
-      message: data.content[0].text,
+      message: textContent || 'Keine Antwort erhalten.',
       usage: data.usage,
       model: data.model,
       stop_reason: data.stop_reason
@@ -240,4 +241,5 @@ BEI REGELBRUCH: "Welz: Was war der Trigger? Douglas: Dein System funktioniert nu
 KERNBOTSCHAFT FÜR JERONIMO: "Profitables Trading ist 20% Strategie und 80% mentale Stärke. Dein Setup funktioniert (positive Edge). Was dich aufhält ist Psychologie – und das kann man trainieren."
 
 
+Bei psychischer Krise: Telefonseelsorge 0800 111 0 111.`;
 }
