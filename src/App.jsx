@@ -329,7 +329,7 @@ export default function App(){
   const equity=useMemo(()=>{let c=0;return t09.map((t,i)=>({i:i+1,v:Math.round((c+=t.pnl)*100)/100}));},[t09]);
   const monthPnl=useMemo(()=>Math.round(t09.filter(t=>t.date.startsWith(todayISO().slice(0,7))).reduce((s,t)=>s+t.pnl,0)*100)/100,[t09]);
   const profitPlan=useMemo(()=>{
-    if(t09.length<10)return null;
+    if(t09.length<2)return null;
     const wins=t09.filter(t=>t.pnl>0),losses=t09.filter(t=>t.pnl<=0);
     const wr=wins.length/t09.length;
     const avgW=wins.length?wins.reduce((s,t)=>s+t.pnl,0)/wins.length:0;
@@ -506,8 +506,12 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         allTrades:t09.map(t=>t.date+" "+t.time+" "+t.contract+" "+t.dir+" "+(t.pnl>=0?"+":"")+"$"+t.pnl.toFixed(0)).join("\n"),
         todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time})),
         coachProfile:coachProfile||'',
-        coachMemory:coachMemory.slice(0,10).map(m=>m.date+': '+m.note).join('\n'),
-        chatHistorySummary:aiMessages.slice(-10).map(m=>(m.role==='user'?'Jeronimo':'Coach')+': '+m.content.slice(0,150)).join('\n')};
+        coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
+        chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
+        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        saldo:Math.round(saldo),
+        todayPnl:todPnl,
+        winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0};
       const res=await fetch('/api/chat',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({messages:[{role:"user",content:prompt}],context:ctx})
@@ -617,16 +621,37 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
 
 const analyzeProblems=async()=>{
   const selected=Object.keys(problems).filter(k=>problems[k]);
-  if(!selected.length){alert("Bitte mindestens ein Problem auswählen!");return;}
+  if(!selected.length){showToast("Bitte mindestens ein Problem auswählen!");return;}
   setProbAnalysisLoading(true);
+  setProbAnalysis('');
   try{
-    const probMsg="Analysiere meine Trading-Probleme: "+selected.join(", ")+". Meine Stats: WR "+Math.round(t09.filter(t=>t.pnl>0).length/(t09.length||1)*100)+"%, "+profitPlan?.overtradeDays+" Overtrading-Tage, Regelquote "+disc+"%. Gib mir einen konkreten Plan für jedes Problem – was ich konkret täglich tun soll.";
-      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({messages:[{role:"user",content:probMsg}],context:{coachProfile,coachMemory:coachMemory.slice(0,5).map(m=>m.date+': '+m.note).join('\n'),tradingStats:{winRate:Math.round(t09.filter(t=>t.pnl>0).length/(t09.length||1)*100),overtradingDays:profitPlan?.overtradeDays||0,disc}}})});
-    const d=await r.json();
-    setProbAnalysis(d.message||'Fehler beim Laden der Analyse.');
-  }catch(e){setProbAnalysis("Fehler: "+e.message);}
-  setProbAnalysisLoading(false);
+    const wr=t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0;
+    const todayPnlStr=(todPnl>=0?"+":"")+todPnl;
+    const prompt="Ich habe folgende Trading-Probleme: "+selected.join(", ")+
+      ". Meine aktuellen Stats: WR "+wr+"%, Saldo $"+Math.round(saldo)+
+      ", Heute: "+todT.length+" Trades ("+todayPnlStr+")"+
+      ", Overtrading-Tage: "+(profitPlan?.overtradeDays||0)+
+      ". Gib mir für JEDES Problem einen konkreten 1-2 Satz Plan was ich ab morgen genau machen soll.";
+    const res=await fetch('/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        messages:[{role:"user",content:prompt}],
+        context:{
+          coachProfile:coachProfile||'',
+          coachMemory:coachMemory.slice(0,5).map(m=>m.note).join(' | '),
+          chatHistorySummary:''
+        }
+      })
+    });
+    if(!res.ok){setProbAnalysis("Fehler: "+res.status);return;}
+    const d=await res.json();
+    setProbAnalysis(d.message||'Keine Antwort erhalten.');
+  }catch(e){
+    setProbAnalysis("Verbindungsfehler: "+e.message);
+  }finally{
+    setProbAnalysisLoading(false);
+  }
 };
 
 const sendAiMessage=async()=>{
@@ -679,8 +704,12 @@ const sendAiMessage=async()=>{
         todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time,setup:t.setup})),
         allTrades:t09.map(t=>({d:t.date,t:t.time,p:Math.round(t.pnl),dir:t.dir,c:t.contract,s:t.setup||""})),
         coachProfile:coachProfile||'',
-        coachMemory:coachMemory.slice(0,10).map(m=>m.date+': '+m.note).join('\n'),
-        chatHistorySummary:aiMessages.slice(-10).map(m=>(m.role==='user'?'Jeronimo':'Coach')+': '+m.content.slice(0,150)).join('\n')
+        coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
+        chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
+        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        saldo:Math.round(saldo),
+        todayPnl:todPnl,
+        winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0
       };
       // Build messages mit optionalem Bild
       const apiMessages=newMsgs.map((m,i)=>{
@@ -710,8 +739,7 @@ const sendAiMessage=async()=>{
         return;
       }
       if(!data.message){
-        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
-        return;
+        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);        return;
       }
       const assistantMsg={role:"assistant",content:data.message,ts:new Date().toISOString()};
       setAiMessages(p=>{
@@ -729,7 +757,8 @@ const sendAiMessage=async()=>{
       );
       if(isKeyInsight){
         const short=msg.replace(/[🔴✅⚠️📌💡🎯]/g,'').slice(0,120).trim();
-        saveCoachMemory("💬 "+short);      }
+        saveCoachMemory("💬 "+short);
+      }
     }catch(err){
       setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Netzwerk Fehler: "+err.message}]);
     }finally{setAiLoading(false);}
@@ -1451,8 +1480,7 @@ const sendAiMessage=async()=>{
                     </div>
                   </div>
                   <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
                       <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
                     </div>
                     {[
@@ -1460,7 +1488,8 @@ const sendAiMessage=async()=>{
                       profitPlan.overtradeDays>5&&"⚠️ "+profitPlan.overtradeDays+" Overtrading-Tage destroyen deinen EV. Strikt max "+DAILY_LIMIT+" Trades/Tag.",
                       evT>0&&"✅ Positive Edge vorhanden. Mit Disziplin wirst du langfristig profitabel.",
                       evT<=0&&"🔴 Negativer EV – Verluste übersteigen Gewinne statistisch. Setup oder Disziplin optimieren.",
-                    ].filter(Boolean).map((t,i)=>(                      <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
+                    ].filter(Boolean).map((t,i)=>(
+                      <div key={i} style={{color:"#cbd5e1",fontSize:11,marginBottom:4,lineHeight:1.5}}>{t}</div>
                     ))}
                     <div style={{color:"#6366f1",fontSize:11,fontWeight:600,marginTop:6}}>Ziel: {profitPlan.neededWR}%+ WR = automatisch profitabel bei 2:1 CRV.</div>
                   </div>
