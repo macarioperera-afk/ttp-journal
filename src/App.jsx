@@ -196,6 +196,7 @@ export default function App(){
   const saveSettings=(s)=>{setSettings(s);localStorage.setItem('ttp_settings',JSON.stringify(s));};
   const[profExpanded,setProfExpanded]=useState(false);
   const[monatExp,setMonatExp]=useState(false);
+  const[challengeStart,setChallengeStart]=useState(()=>localStorage.getItem('ttp_challenge_start')||'2000-01-01');
   
   const[probExp,setProbExp]=useState(false);
   const[problems,setProblems]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_problems')||'{}');}catch{return{};}});
@@ -272,7 +273,7 @@ export default function App(){
   const pStr=pMin+":"+(pSec<10?"0":"")+pSec;
   const sc=v=>v>=80?G:v>=60?Y:R;
 
-  const t09=useMemo(()=>trades.filter(t=>t&&t.acct==="09"&&typeof t.date==="string").sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1),[trades]);
+  const t09=useMemo(()=>trades.filter(t=>t&&t.acct==="09"&&typeof t.date==="string"&&t.date>=challengeStart).sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1),[trades,challengeStart]);
   const netPnl=useMemo(()=>Math.round(t09.reduce((s,t)=>s+t.pnl,0)*100)/100,[t09]);
   const kontoabstand=Math.max(0,Math.round((saldo-maxDDLevel)*100)/100);
   const todT=t09.filter(t=>t.date===todayISO());
@@ -738,8 +739,8 @@ const sendAiMessage=async()=>{
         setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
         return;
       }
-      if(!data.message){
-        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);        return;
+      if(!data.message){        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
+        return;
       }
       const assistantMsg={role:"assistant",content:data.message,ts:new Date().toISOString()};
       setAiMessages(p=>{
@@ -945,7 +946,7 @@ const sendAiMessage=async()=>{
               <div style={{color:"#f0f4ff",fontWeight:800,fontSize:14}}>🚀 Neue Challenge starten?</div>
               <div style={{color:"#8b96b0",fontSize:11}}>Saldo auf $50.000 setzen · Max DD $2.000</div>
             </div>
-            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo",50000);setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
+            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){const tod=new Date().toISOString().slice(0,10);setSaldo(50000);localStorage.setItem("ttp_saldo",50000);setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);setChallengeStart(tod);localStorage.setItem("ttp_challenge_start",tod);showToast("✅ Neue Challenge! $50.000 gestartet!");}}}
               style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"8px 16px",borderRadius:10,fontWeight:800,fontSize:13,flexShrink:0}}>
               Starten
             </button>
@@ -982,7 +983,7 @@ const sendAiMessage=async()=>{
               <div style={{color:"#f0f4ff",fontWeight:800,fontSize:14}}>🚀 Neue Challenge starten?</div>
               <div style={{color:"#8b96b0",fontSize:11}}>Saldo auf $50.000 setzen · Max DD $2.000</div>
             </div>
-            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){setSaldo(50000);localStorage.setItem("ttp_saldo",50000);setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);showToast("✅ Neue Challenge! $50.000 · Viel Erfolg!");}}}
+            <button onClick={()=>{if(window.confirm("Neue Challenge:\n$50.000 Start\nMax DD: $2.000\n\nTrades & WR bleiben erhalten!")){const tod=new Date().toISOString().slice(0,10);setSaldo(50000);localStorage.setItem("ttp_saldo",50000);setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);setChallengeStart(tod);localStorage.setItem("ttp_challenge_start",tod);showToast("✅ Neue Challenge! $50.000 gestartet!");}}}
               style={{background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"8px 16px",borderRadius:10,fontWeight:800,fontSize:13,flexShrink:0}}>
               Starten
             </button>
@@ -1479,8 +1480,8 @@ const sendAiMessage=async()=>{
                       ))}
                     </div>
                   </div>
-                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
+                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
                       <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
                     </div>
                     {[
