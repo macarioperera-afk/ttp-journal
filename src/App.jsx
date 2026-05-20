@@ -197,6 +197,26 @@ export default function App(){
   const[profExpanded,setProfExpanded]=useState(false);
   const[monatExp,setMonatExp]=useState(false);
   const[challengeStart,setChallengeStart]=useState(()=>localStorage.getItem('ttp_challenge_start')||'2000-01-01');
+  const[acct,setAcct]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem('ttp_account')||'null')||{
+      type:'challenge',broker:'TTP',number:'P1-235109',
+      size:50000,maxDD:2000,dailyDD:1000,target:54000,targetDays:30
+    };}catch(e){return{type:'challenge',broker:'TTP',number:'P1-235109',size:50000,maxDD:2000,dailyDD:1000,target:54000,targetDays:30};}
+  });
+  const saveAcct=(a)=>{setAcct(a);localStorage.setItem('ttp_account',JSON.stringify(a));};
+  const startChallenge=()=>{
+    const today=new Date().toISOString().slice(0,10);
+    setChallengeStart(today);
+    localStorage.setItem('ttp_challenge_start',today);
+    setSaldo(acct.size);
+    localStorage.setItem('ttp_saldo',acct.size);
+    setMaxDDLevel(acct.size-acct.maxDD);
+    localStorage.setItem('ttp_maxdd_level',acct.size-acct.maxDD);
+    const newGoals={...goals,targetBalance:acct.target};
+    setGoals(newGoals);
+    localStorage.setItem('ttp_goals',JSON.stringify(newGoals));
+    showToast('✅ Challenge gestartet! $'+acct.size.toLocaleString()+' · Ziel: $'+acct.target.toLocaleString());
+  };
   
   const[probExp,setProbExp]=useState(false);
   const[problems,setProblems]=useState(()=>{try{return JSON.parse(localStorage.getItem('ttp_problems')||'{}');}catch{return{};}});
@@ -730,8 +750,7 @@ const sendAiMessage=async()=>{
         body:JSON.stringify({messages:apiMessages,context:ctx})
       });
       const rawText=await res.text();
-      if(!res.ok){
-        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);
+      if(!res.ok){        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);
         return;
       }
       let data;
@@ -739,7 +758,8 @@ const sendAiMessage=async()=>{
         setAiMessages(p=>[...p,{role:"assistant",content:"🔴 JSON Fehler: "+rawText.slice(0,200)}]);
         return;
       }
-      if(!data.message){        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
+      if(!data.message){
+        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 Kein message Feld: "+JSON.stringify(data).slice(0,200)}]);
         return;
       }
       const assistantMsg={role:"assistant",content:data.message,ts:new Date().toISOString()};
@@ -1480,9 +1500,9 @@ const sendAiMessage=async()=>{
                       ))}
                     </div>
                   </div>
-                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
-                      <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
+                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>                      <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
                     </div>
                     {[
                       profitPlan.wr<profitPlan.neededWR&&"📊 WR "+profitPlan.wr+"% liegt unter Break-Even "+profitPlan.neededWR+"%. Fokus auf Setup-Qualität statt Quantität.",
@@ -2096,23 +2116,35 @@ const sendAiMessage=async()=>{
               </div>}
 
               {settingsSection==="data"&&sec.id==="data"&&<div style={{padding:"12px 14px",borderTop:"1px solid #2d3548",background:"#0d1320"}}>
-                <Field label="SALDO ($)">
-                  <input type="number" step="0.01" defaultValue={saldo} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setSaldo(v);localStorage.setItem("ttp_saldo",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-                </Field>
-                <div style={{marginTop:8}}>
-                  <Field label="MAX DD LEVEL ($)">
-                    <input type="number" step="0.01" defaultValue={maxDDLevel} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){setMaxDDLevel(v);localStorage.setItem("ttp_maxdd_level",v);}}} style={{background:"transparent",border:"none",padding:"2px 0",fontSize:14,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/>
-                  </Field>
+                <div style={{color:"#a5b4fc",fontSize:11,fontWeight:700,marginBottom:8}}>KONTO TYP</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
+                  {[{k:"challenge",l:"🎯 Challenge"},{k:"pa",l:"💰 PA Account"}].map(t=>(
+                    <button key={t.k} onClick={()=>saveAcct({...acct,type:t.k})}
+                      style={{padding:"8px",borderRadius:8,fontSize:11,fontWeight:700,background:acct.type===t.k?"rgba(99,102,241,0.25)":"rgba(255,255,255,0.04)",border:"1px solid "+(acct.type===t.k?"#6366f1":"#2d3548"),color:acct.type===t.k?"#a5b4fc":"#6b7a9a"}}>{t.l}</button>
+                  ))}
                 </div>
-                <button onClick={()=>{
-                if(window.confirm("Neue Challenge starten?\n\nSetzt:\n• Saldo auf $50.000\n• Max DD Level auf $48.000\n• Alle Trades bleiben erhalten")){
-                  setSaldo(50000);localStorage.setItem("ttp_saldo",50000);
-                  setMaxDDLevel(48000);localStorage.setItem("ttp_maxdd_level",48000);
-                  showToast("✅ Neue Challenge gestartet! Viel Erfolg!");
-                  setSettingsOpen(false);
-                }
-              }} style={{marginBottom:8,background:"linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.1))",color:B,border:"1px solid rgba(99,102,241,0.3)",padding:"10px 14px",width:"100%",fontWeight:700,fontSize:13,borderRadius:10}}>🚀 Neue Challenge ($50.000)</button>
-              <button onClick={()=>{if(window.confirm("Alle Daten loeschen?")){{localStorage.clear();window.location.reload();}}}} style={{background:"rgba(239,68,68,0.08)",color:R,border:"1px solid rgba(239,68,68,0.2)",padding:"10px 14px",width:"100%",fontWeight:600,fontSize:12,borderRadius:10}}>Alle Daten löschen</button>
+                <Field label="BROKER"><input defaultValue={acct.broker} onBlur={e=>saveAcct({...acct,broker:e.target.value})} style={{background:"transparent",border:"none",fontSize:13,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                <Field label="KONTO NUMMER"><input defaultValue={acct.number} onBlur={e=>saveAcct({...acct,number:e.target.value})} style={{background:"transparent",border:"none",fontSize:13,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                <div style={{color:"#a5b4fc",fontSize:11,fontWeight:700,marginTop:10,marginBottom:8}}>KONTO GRÖßE</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:10}}>
+                  {[50000,75000,100000,125000,150000,200000].map(s=>(
+                    <button key={s} onClick={()=>saveAcct({...acct,size:s})} style={{padding:"6px 4px",borderRadius:7,fontSize:10,fontWeight:700,background:acct.size===s?"rgba(99,102,241,0.25)":"rgba(255,255,255,0.04)",border:"1px solid "+(acct.size===s?"#6366f1":"#2d3548"),color:acct.size===s?"#a5b4fc":"#6b7a9a"}}>${s/1000}k</button>
+                  ))}
+                </div>
+                <div style={{color:"#a5b4fc",fontSize:11,fontWeight:700,marginBottom:8}}>RISIKO EINSTELLUNGEN</div>
+                <Field label={"MAX DD ($) – Level: $"+(acct.size-acct.maxDD).toLocaleString()}><input type="number" defaultValue={acct.maxDD} onBlur={e=>{const v=parseInt(e.target.value);if(!isNaN(v))saveAcct({...acct,maxDD:v});}} style={{background:"transparent",border:"none",fontSize:13,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                <Field label="DAILY DD LIMIT ($)"><input type="number" defaultValue={acct.dailyDD} onBlur={e=>{const v=parseInt(e.target.value);if(!isNaN(v))saveAcct({...acct,dailyDD:v});}} style={{background:"transparent",border:"none",fontSize:13,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                {acct.type==='challenge'&&<div>
+                  <div style={{color:"#a5b4fc",fontSize:11,fontWeight:700,marginTop:10,marginBottom:8}}>CHALLENGE ZIEL</div>
+                  <Field label="ZIEL SALDO ($)"><input type="number" defaultValue={acct.target} onBlur={e=>{const v=parseInt(e.target.value);if(!isNaN(v))saveAcct({...acct,target:v});}} style={{background:"transparent",border:"none",fontSize:13,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                  <div style={{color:"#6b7a9a",fontSize:9,marginBottom:6}}>z.B. $50k + 8% Ziel = 54000 eingeben</div>
+                  <Field label="ZEITRAUM (TAGE)"><input type="number" defaultValue={acct.targetDays} onBlur={e=>{const v=parseInt(e.target.value);if(!isNaN(v))saveAcct({...acct,targetDays:v});}} style={{background:"transparent",border:"none",fontSize:13,fontWeight:700,color:"#f0f4ff",width:"100%",outline:"none"}}/></Field>
+                </div>}
+                <div style={{background:"rgba(99,102,241,0.08)",borderRadius:8,padding:"8px 10px",margin:"10px 0"}}>
+                  <div style={{color:"#8b96b0",fontSize:10}}>Challenge läuft seit: <span style={{color:"#a5b4fc",fontWeight:700}}>{challengeStart==='2000-01-01'?'Nicht gestartet':challengeStart}</span></div>
+                </div>
+                <button onClick={()=>{if(window.confirm("Challenge starten:\nKonto: $"+acct.size.toLocaleString()+"\nMax DD: $"+acct.maxDD+"\nZiel: $"+acct.target+"\n\nAlles startet bei 0!")){startChallenge();}}} style={{marginBottom:8,background:"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",padding:"12px",width:"100%",fontWeight:800,fontSize:13,borderRadius:10}}>🚀 Challenge starten / neu starten</button>
+                <button onClick={()=>{if(window.confirm("Alle Daten löschen?")){{localStorage.clear();window.location.reload();}}}} style={{background:"rgba(239,68,68,0.06)",color:R,border:"1px solid rgba(239,68,68,0.2)",padding:"10px",width:"100%",fontWeight:600,fontSize:11,borderRadius:10}}>Alle Daten löschen</button>
               </div>}
             </div>
           ))}
