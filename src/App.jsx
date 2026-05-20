@@ -293,7 +293,8 @@ export default function App(){
   const pStr=pMin+":"+(pSec<10?"0":"")+pSec;
   const sc=v=>v>=80?G:v>=60?Y:R;
 
-  const t09=useMemo(()=>trades.filter(t=>t&&t.acct==="09"&&typeof t.date==="string"&&t.date>=challengeStart).sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1),[trades,challengeStart]);
+  const allT09=useMemo(()=>trades.filter(t=>t&&t.acct==="09"&&typeof t.date==="string").sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1),[trades]);
+  const t09=useMemo(()=>allT09.filter(t=>t.date>=challengeStart),[allT09,challengeStart]);
   const netPnl=useMemo(()=>Math.round(t09.reduce((s,t)=>s+t.pnl,0)*100)/100,[t09]);
   const kontoabstand=Math.max(0,Math.round((saldo-maxDDLevel)*100)/100);
   const todT=t09.filter(t=>t.date===todayISO());
@@ -350,7 +351,8 @@ export default function App(){
   const equity=useMemo(()=>{let c=0;return t09.map((t,i)=>({i:i+1,v:Math.round((c+=t.pnl)*100)/100}));},[t09]);
   const monthPnl=useMemo(()=>Math.round(t09.filter(t=>t.date.startsWith(todayISO().slice(0,7))).reduce((s,t)=>s+t.pnl,0)*100)/100,[t09]);
   const profitPlan=useMemo(()=>{
-    if(t09.length<2)return null;
+    const dataSet=t09.length>=2?t09:allT09; // Use challenge trades, fall back to all
+    if(dataSet.length<2)return null;
     const wins=t09.filter(t=>t.pnl>0),losses=t09.filter(t=>t.pnl<=0);
     const wr=wins.length/t09.length;
     const avgW=wins.length?wins.reduce((s,t)=>s+t.pnl,0)/wins.length:0;
@@ -362,7 +364,7 @@ export default function App(){
     return{wr:Math.round(wr*100),rr:rr.toFixed(1),neededWR:Math.round(100/(1+rr)),
       dailyEV,monthlyEV,avgW:Math.round(avgW),avgL:Math.round(avgL),
       overtradeDays:Object.values(m).filter(n=>n>3).length,totalDays:Object.keys(m).length};
-  },[t09]);
+  },[t09,allT09]);
 
   const durBuckets=useMemo(()=>{
     const bkts=[{lbl:"<30s",mn:0,mx:30},{lbl:"30s-2m",mn:30,mx:120},{lbl:"2-5m",mn:120,mx:300},{lbl:"5m+",mn:300,mx:999999}];
@@ -529,7 +531,7 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
         chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
-        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',totalTrades:allT09.length,allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
         saldo:Math.round(saldo),
         todayPnl:todPnl,
         winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0};
@@ -727,7 +729,7 @@ const sendAiMessage=async()=>{
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
         chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
-        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',totalTrades:allT09.length,allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
         saldo:Math.round(saldo),
         todayPnl:todPnl,
         winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0
@@ -748,9 +750,8 @@ const sendAiMessage=async()=>{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({messages:apiMessages,context:ctx})
-      });
-      const rawText=await res.text();
-      if(!res.ok){        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);
+      });      if(!res.ok){
+        setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);
         return;
       }
       let data;
@@ -2255,3 +2256,5 @@ const sendAiMessage=async()=>{
     </div>
   );
 }
+
+      const rawText=await res.text();
