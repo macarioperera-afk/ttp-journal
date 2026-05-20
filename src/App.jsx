@@ -684,8 +684,8 @@ const sendAiMessage=async()=>{
     // "Merke dir..." Befehl → direkt ins Gedächtnis
     const inputLow=(aiInput||"").toLowerCase();
     // TTP Import from chat: paste TTP data directly
-    if(userInput.includes('NQ-202606') || userInput.includes('MNQ-202606')){
-      const lines=userInput.trim().split('\n').filter(l=>l.includes('CME'));
+    if(aiInput.includes('NQ-202606') || aiInput.includes('MNQ-202606')){
+      const lines=aiInput.trim().split('\n').filter(l=>l.includes('CME'));
       const imported=[];
       for(const line of lines){
         const parts=line.split('\t').map(s=>s.trim()).filter(Boolean);
