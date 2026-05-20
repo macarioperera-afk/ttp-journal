@@ -530,8 +530,8 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         todayTrades:todT.map(t=>({pnl:t.pnl,dir:t.dir,contract:t.contract,time:t.time})),
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
-        chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
-        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        chatHistorySummary:aiMessages.slice(-6).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,100).replace(/[\u0080-\uFFFF]/g,'').replace(/\t/g,' ')).join(' | '),
+        todayTrades:(todT.map(t=>t.time+' '+t.dir+' $'+Math.round(t.pnl)).join(', ')||'Keine Trades heute').replace(/[\u0080-\uFFFF]/g,''),
         totalTrades:allT09.length,
         allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
         saldo:Math.round(saldo),
@@ -683,6 +683,34 @@ const sendAiMessage=async()=>{
     if((!aiInput.trim()&&!aiImage)||aiLoading)return;
     // "Merke dir..." Befehl → direkt ins Gedächtnis
     const inputLow=(aiInput||"").toLowerCase();
+    // TTP Import from chat: paste TTP data directly
+    if(userInput.includes('NQ-202606') || userInput.includes('MNQ-202606')){
+      const lines=userInput.trim().split('\n').filter(l=>l.includes('CME'));
+      const imported=[];
+      for(const line of lines){
+        const parts=line.split('\t').map(s=>s.trim()).filter(Boolean);
+        if(parts.length<8)continue;
+        const contract=parts[0].includes('MNQ')?'MNQ':'NQ';
+        const dtMatch=parts[1]?.match(/(\d+)\.(\d+)\.(\d+),\s*(\d+):(\d+)/);
+        if(!dtMatch)continue;
+        const [,day,month,year,hour,min]=dtMatch;
+        const date=year+'-'+month.padStart(2,'0')+'-'+day.padStart(2,'0');
+        const time=hour+':'+min;
+        const pnlStr=(parts[7]||'0').replace(/[$,]/g,'').replace(',','.');
+        const pnl=parseFloat(pnlStr);
+        if(isNaN(pnl))continue;
+        imported.push({id:uid(),acct:'09',contract,date,time,pnl,dur:0,dir:parseInt(parts[6]||'1')>0?'LONG':'SHORT',setup:'Chat Import',notes:'',rules:{r1:true,r2:true,r3:true,r4:true,r5:true,r6:true}});
+      }
+      if(imported.length>0){
+        setTrades(p=>{const u=[...p,...imported];localStorage.setItem('ttp_trades',JSON.stringify(u));return u;});
+        const totalPnl=Math.round(imported.reduce((s,t)=>s+t.pnl,0));
+        const newSaldo=Math.round((saldo+totalPnl)*100)/100;
+        setSaldo(newSaldo);localStorage.setItem('ttp_saldo',newSaldo);
+        setAiMessages(p=>[...p,{role:'user',content:'[TTP Import]'},{role:'assistant',content:'✅ '+imported.length+' Trades importiert! P&L: '+(totalPnl>=0?'+':'')+'$'+totalPnl+'. Saldo jetzt: $'+newSaldo.toLocaleString()+'.\n\n'+(imported.some(t=>t.contract==='NQ')?'⚠️ Achtung: NQ-Trades erkannt! Das sind 10x größere Kontrakte als MNQ. War das absichtlich?':'')}]);
+        setAiInput('');
+        return;
+      }
+    }
     if(inputLow.startsWith("merke dir")||inputLow.startsWith("vergiss nicht")){
       const note=aiInput.slice(inputLow.indexOf(" ")+1).trim();
       if(note){
@@ -730,11 +758,10 @@ const sendAiMessage=async()=>{
         allTrades:t09.map(t=>({d:t.date,t:t.time,p:Math.round(t.pnl),dir:t.dir,c:t.contract,s:t.setup||""})),
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
-        chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
-        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        chatHistorySummary:aiMessages.slice(-6).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,100).replace(/[\u0080-\uFFFF]/g,'').replace(/\t/g,' ')).join(' | '),
+        todayTrades:(todT.map(t=>t.time+' '+t.dir+' $'+Math.round(t.pnl)).join(', ')||'Keine Trades heute').replace(/[\u0080-\uFFFF]/g,''),
         totalTrades:allT09.length,
-        allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
-        saldo:Math.round(saldo),
+        allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,        saldo:Math.round(saldo),
         todayPnl:todPnl,
         winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0
       };
@@ -752,7 +779,8 @@ const sendAiMessage=async()=>{
       setAiImagePreview(null);
       const res=await fetch('/api/chat',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},        body:JSON.stringify({messages:apiMessages,context:ctx})
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({messages:apiMessages,context:ctx})
       });
       const rawText=await res.text();
       if(!res.ok){
@@ -1496,8 +1524,7 @@ const sendAiMessage=async()=>{
                         {l:"EV / TAG",v:(evD>=0?"+":"")+"$"+evD,c:evD>=0?G:R,s:"2 Trades · Expected Value"},
                         {l:"PROGNOSE MONAT",v:(projM>=0?"+":"")+"$"+projM,c:projM>=0?G:R,s:dLeft+" Handelstage"},
                         {l:"MONATE BIS ZIEL",v:monateBis?monateBis+"Mo":"∞",c:monateBis&&monateBis<=6?G:Y,s:"bei akt. Performance"},
-                        {l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"},
-                      ].map(s=>(
+                        {l:"HANDELSTAGE NOCH",v:dLeft+" Tage",c:dLeft>5?G:dLeft>2?Y:R,s:"bis Monatsende"},                      ].map(s=>(
                         <div key={s.l} style={{background:"#0f1828",borderRadius:7,padding:"8px 10px",border:"1px solid #1e2030"}}>
                           <div style={{color:"#6b7a9a",fontSize:9}}>{s.l}</div>
                           <div style={{color:s.c,fontWeight:800,fontSize:15}}>{s.v}</div>
@@ -1506,7 +1533,8 @@ const sendAiMessage=async()=>{
                       ))}
                     </div>
                   </div>
-                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
                       <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
                       <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
                     </div>
