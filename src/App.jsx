@@ -531,7 +531,9 @@ Soll ich jetzt traden? Klare Ja/Nein Empfehlung mit kurzem Grund. Max 3 Sätze.`
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
         chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
-        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',totalTrades:allT09.length,allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
+        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        totalTrades:allT09.length,
+        allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
         saldo:Math.round(saldo),
         todayPnl:todPnl,
         winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0};
@@ -729,7 +731,9 @@ const sendAiMessage=async()=>{
         coachProfile:coachProfile||'',
         coachMemory:coachMemory.slice(0,8).map(m=>m.note).join(' | '),
         chatHistorySummary:aiMessages.slice(-8).map(m=>(m.role==='user'?'Du':'Coach')+': '+m.content.slice(0,120)).join('\n'),
-        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',totalTrades:allT09.length,allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
+        todayTrades:todT.map(t=>t.time+' '+t.dir+' '+t.pnl).join(', ')||'Keine Trades heute',
+        totalTrades:allT09.length,
+        allTimeWR:allT09.length?Math.round(allT09.filter(t=>t.pnl>0).length/allT09.length*100):0,
         saldo:Math.round(saldo),
         todayPnl:todPnl,
         winRate:t09.length?Math.round(t09.filter(t=>t.pnl>0).length/t09.length*100):0
@@ -748,9 +752,10 @@ const sendAiMessage=async()=>{
       setAiImagePreview(null);
       const res=await fetch('/api/chat',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({messages:apiMessages,context:ctx})
-      });      if(!res.ok){
+        headers:{'Content-Type':'application/json'},        body:JSON.stringify({messages:apiMessages,context:ctx})
+      });
+      const rawText=await res.text();
+      if(!res.ok){
         setAiMessages(p=>[...p,{role:"assistant",content:"🔴 HTTP "+res.status+": "+rawText.slice(0,200)}]);
         return;
       }
@@ -1501,9 +1506,9 @@ const sendAiMessage=async()=>{
                       ))}
                     </div>
                   </div>
-                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>                      <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
+                  <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(168,85,247,0.05))",borderRadius:10,padding:12,border:"1px solid rgba(99,102,241,0.15)"}}>                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:B,animation:"pulse 2s infinite"}}/>
+                      <div style={{color:B,fontSize:11,fontWeight:700,letterSpacing:"0.5px"}}>MINDRISK AI ANALYSE</div>
                     </div>
                     {[
                       profitPlan.wr<profitPlan.neededWR&&"📊 WR "+profitPlan.wr+"% liegt unter Break-Even "+profitPlan.neededWR+"%. Fokus auf Setup-Qualität statt Quantität.",
@@ -2256,5 +2261,3 @@ const sendAiMessage=async()=>{
     </div>
   );
 }
-
-      const rawText=await res.text();
