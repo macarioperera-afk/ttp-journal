@@ -130,8 +130,14 @@ ${ctx.coachMemory || 'Noch keine gespeicherten Erkenntnisse'}
 LETZTE GESPRÄCHE (Kontext für Kontinuität):
 ${ctx.chatHistorySummary || 'Erste Session heute'}
 
-AKTUELLE LIVE-DATEN:
-${JSON.stringify({...ctx, allTrades: undefined, coachProfile: undefined, coachMemory: undefined}, null, 2)}
+HEUTE IM ÜBERBLICK:
+- Saldo: $${ctx.saldo || '?'}
+- Heute P&L: ${ctx.todayPnl >= 0 ? '+' : ''}$${ ctx.todayPnl || 0}
+- Heute Trades: ${ctx.todayTrades || 'Keine'}
+- Win Rate gesamt: ${ctx.winRate || 0}%
+
+LETZTE GESPRÄCHE:
+${ctx.chatHistorySummary || 'Erster Chat heute'}
 
 ALLE HISTORISCHEN TRADES (kompakt - für Muster-Analyse):
 ${ctx.allTrades ? ctx.allTrades : 'Keine Daten'}
